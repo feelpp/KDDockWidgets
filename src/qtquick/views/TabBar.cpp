@@ -238,6 +238,15 @@ bool TabBar::closeAtIndex(int index)
     return false;
 }
 
+bool TabBar::floatAtIndex(int index)
+{
+  if (auto dw = d->m_dockWidgetModel->dockWidgetAt(index)) {
+      dw->floatAction()->toggle();
+      return true;
+  }
+  return false;
+}
+
 void TabBar::renameTab(int, const QString &)
 {
     /// Nothing to do for QtQuick. The .qml has a binding

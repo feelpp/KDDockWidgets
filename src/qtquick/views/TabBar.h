@@ -74,6 +74,10 @@ public:
 
     Q_INVOKABLE bool closeAtIndex(int index);
 
+    /// @brief Apply floating action to the dock widget at the specified index
+    /// Returns true if action can be achieved
+    Q_INVOKABLE bool floatAtIndex(int index);
+
     Stack *stackView() const;
     void renameTab(int index, const QString &) override;
     void changeTabIcon(int index, const QIcon &icon) override;
