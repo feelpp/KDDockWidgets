@@ -38,7 +38,7 @@ class FloatingWindow;
 class View;
 }
 
-class Position;
+class Positions;
 class DockRegistry;
 
 /// @brief A more granular version of KDDockWidgets::RestoreOption
@@ -136,6 +136,9 @@ struct DOCKS_EXPORT LayoutSaver::DockWidget
     Vector<QString> affinities;
     LayoutSaver::Position lastPosition;
     CloseReason lastCloseReason;
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QVariantMap userData;
+#endif
 
 private:
     DockWidget()
@@ -264,12 +267,13 @@ struct DOCKS_EXPORT LayoutSaver::Layout
 public:
     Layout()
     {
+        assert(!s_currentLayoutBeingRestored);
         s_currentLayoutBeingRestored = this;
 
         const auto screens = Core::Platform::instance()->screens();
-        const int numScreens = screens.size();
+        const auto numScreens = screens.size();
         screenInfo.reserve(numScreens);
-        for (int i = 0; i < numScreens; ++i) {
+        for (auto i = 0; i < numScreens; ++i) {
             ScreenInfo info;
             info.index = i;
             info.geometry = screens[i]->geometry();
@@ -343,7 +347,7 @@ public:
 
     /// If a layout is restored but the dock widget doesn't exist, we store its last position here
     /// so when we create the dock widget we can finally restore
-    static std::unordered_map<QString, std::shared_ptr<KDDockWidgets::Position>> s_unrestoredPositions;
+    static std::unordered_map<QString, std::shared_ptr<KDDockWidgets::Positions>> s_unrestoredPositions;
 
     /// Misc unrestored properties we might want to restore. Only CloseReason for now
     /// TODO: If we keep needing to expose more stuff, we can just expose the entire LayoutSaver::Layout instead

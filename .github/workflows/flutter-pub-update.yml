@@ -8,14 +8,12 @@ name: (Scheduled) Runs flutter pub upgrade
 
 on:
   schedule:
-  - cron: '0 0 1 * *' # monthly
+    - cron: "0 0 1 * *" # monthly
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
 
     steps:
       - name: Checkout sources
@@ -31,30 +29,15 @@ jobs:
       - name: Install Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
-          channel: 'stable'
+          flutter-version: "3.x"
+          channel: "stable"
 
       - name: Setup git author name
         uses: fregante/setup-git-user@v2
 
-      - name: pub upgrade on flutter_tests_embedder
-        run: |
-          cd tests/flutter_tests_embedder/
-          flutter pub upgrade
-
-      - name: pub upgrade on flutter_tests_embedder
-        run: |
-          cd tests/flutter_tests_embedder/
-          flutter pub upgrade --major-versions
-
       - name: pub upgrade on examples
         run: |
           cd examples/flutter
-          flutter pub upgrade --major-versions
-
-      - name: pub upgrade on src/flutter
-        run: |
-          cd src/flutter
           flutter pub upgrade --major-versions
 
       - name: pub upgrade on src/flutter/dart

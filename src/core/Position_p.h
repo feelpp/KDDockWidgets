@@ -37,56 +37,28 @@ class Layout;
 class LayoutingHost;
 }
 
-// Just a RAII class so we don't forget to unref
-struct ItemRef
-{
-    explicit ItemRef(KDBindings::ConnectionHandle conn, Core::Item *);
-    ~ItemRef();
-
-    bool isInMainWindow() const;
-
-    Core::ObjectGuard<Core::Item> item;
-    KDBindings::ConnectionHandle connection;
-
-private:
-    KDDW_DELETE_COPY_CTOR(ItemRef)
-};
-
 /**
  * @internal
- * @brief Represents the DockWidget's last position.
+ * @brief Represents the DockWidget's last positions.
  *
- * The DockWidget's position is saved when it's closed and restored when it's shown.
- * This class holds that position.
+ * DockWidgets know where they were in the main window even after they're closed, so that
+ * showing them again puts them in their previous place.
+ *
+ * This class is called Positions since the window might also have a floating position memorized.
+ *
+ * This class is not directly related to LayoutSaver which saves/restores in bulk. It's more
+ * for redocking back when you double-click a floating dock widget title-bar for example.
  */
-class DOCKS_EXPORT_FOR_UNIT_TESTS Position
+class DOCKS_EXPORT_FOR_UNIT_TESTS Positions
 {
-    KDDW_DELETE_COPY_CTOR(Position)
+    KDDW_DELETE_COPY_CTOR(Positions)
 public:
-    typedef std::shared_ptr<Position> Ptr;
-    Position() = default;
-    ~Position();
+    typedef std::shared_ptr<Positions> Ptr;
+    Positions() = default;
+    ~Positions();
 
     void deserialize(const LayoutSaver::Position &);
     LayoutSaver::Position serialize() const;
-
-    /**
-     * @brief Returns whether the Position is valid. If invalid then the DockWidget was never
-     * in a MainWindow.
-     */
-    bool isValid() const
-    {
-        return layoutItem() != nullptr;
-    }
-
-    /**
-     * @brief returns if the dock widget was in a tab
-     * @return if the position is tabbed, false otherwise
-     */
-    bool isTabbed() const
-    {
-        return m_tabIndex != -1;
-    }
 
     ///@brief The tab index in case the dock widget was in a TabWidget, -1 otherwise.
     int m_tabIndex = -1;
@@ -95,18 +67,11 @@ public:
     bool m_wasFloating = false;
 
     ///@brief Adds the last layout item where the dock widget was (or is)
+    /// This is called at the moment the dock widget is added into any layout
     void addPlaceholderItem(Core::Item *placeholder);
-
-    Core::Item *layoutItem() const;
 
     bool containsPlaceholder(Core::Item *) const;
     void removePlaceholders();
-
-    /// @brief Returns the last places where the dock widget was or is
-    const std::vector<std::unique_ptr<ItemRef>> &placeholders() const
-    {
-        return m_placeholders;
-    }
 
     ///@brief Removes the placeholders that belong to this multisplitter
     void removePlaceholders(const Core::LayoutingHost *);
@@ -114,8 +79,19 @@ public:
     ///@brief Removes the placeholders that reference a FloatingWindow
     void removeNonMainWindowPlaceholders();
 
+    ///@brief Removes the placeholders that reference a MainWindow
+    void removeMainWindowPlaceholders();
+
     ///@brief removes the Item @p placeholder
     void removePlaceholder(Core::Item *placeholder);
+
+    /// The amount of placeholders we know about
+    /// this will be either:
+    /// 0 - if dock widget hasn't been docked
+    /// 1 - if it has been docked
+    /// 2 - if it has been docked to main window and to a floating window
+    /// We don't support memorizing more than 1 main window or more than 1 floating window
+    int placeholderCount() const;
 
     void saveTabIndex(int tabIndex, bool isFloating)
     {
@@ -138,10 +114,13 @@ public:
         return m_lastFloatingGeometry;
     }
 
-    Core::Item *lastItem() const
-    {
-        return layoutItem();
-    }
+
+    /// Returns the placeholder Item where the dock widget *was*
+    /// Pass current to exclude the current layout Item where it's living
+    Core::Item *lastItem(Core::Item *current = nullptr) const;
+
+    /// convenience overload
+    Core::Item *lastItem(const Core::DockWidget *current) const;
 
     int lastTabIndex() const
     {
@@ -160,6 +139,23 @@ public:
     }
 
 private:
+    /// A RAII class so we don't forget to unref
+    struct ItemRef
+    {
+        explicit ItemRef(KDBindings::ConnectionHandle conn, Core::Item *);
+        ~ItemRef();
+
+        bool isInMainWindow() const;
+
+        Core::ObjectGuard<Core::Item> item;
+        KDBindings::ConnectionHandle connection;
+
+    private:
+        KDDW_DELETE_COPY_CTOR(ItemRef)
+    };
+
+    bool itemIsBeingDestroyed(Core::Item *) const;
+
     // The last places where this dock widget was (or is), so it can be restored when
     // setFloating(false) or show() is called.
     std::vector<std::unique_ptr<ItemRef>> m_placeholders;

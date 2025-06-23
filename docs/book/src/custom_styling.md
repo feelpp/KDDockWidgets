@@ -16,7 +16,7 @@ You can derive any of these components:
 - `RubberBand`, indicates the drop location when dragging
 - `SideBar`, the sidebar when using the "auto hide feature"
 - `ClassicDropIndicatorOverlay`, the drop indicators
-- `SegmentedDropIndicatorOverlay`, the drop indicators in segmented mode
+- `SegmentedDropIndicatorOverlay`, the drop indicators in segmented mode (not available for QtQuick)
 
 After deriving one or more of the above, create a custom `ViewFactory.h` which returns your derived instances.
 Then call `KDDockWidgets::Config::self().setViewFactory(new MyCustomWidgetFactory());`.
@@ -28,3 +28,9 @@ See `examples/dockwidgets/MyViewFactory.h` for QtWidgets, or `examples/qtquick/c
 `Qt StyleSheets` are not, and will not, be supported. See the comments in
 `examples/dockwidgets/MyTitleBar_CSS.h` for why. You can however use some minimal
 CSS, as shown in that example, just don't report bugs about it.
+
+## Known Issues
+
+- tabbars use a `QProxyStyle` to workaround a Qt bug. That proxy style is based on the `QApplication`'s style.
+If you later change `QApplication`'s style, that won't propagate to the existing `QProxyStyle`. See possible
+workaround in https://github.com/KDAB/KDDockWidgets/issues/635

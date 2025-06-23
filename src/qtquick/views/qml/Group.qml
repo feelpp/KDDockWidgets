@@ -10,25 +10,24 @@
 */
 
 import QtQuick 2.9
-import QtQuick.Layouts 1.9
-
 import com.kdab.dockwidgets 2.0
 
 Rectangle {
     id: root
 
-    property QtObject groupCpp
+    property GroupView groupCpp
     readonly property QtObject titleBarCpp: groupCpp ? groupCpp.titleBar : null
-    readonly property int nonContentsHeight: (titleBar.item ? titleBar.item.heightWhenVisible : 0) + tabbar.implicitHeight + (2 * contentsMargin) + titleBarContentsMargin
+    readonly property int nonContentsHeight: (titleBar.item ? titleBar.item.heightWhenVisible : 0) + tabbar.implicitHeight + (2 * contentsMargin) + titleBarContentsMargin // qmllint disable missing-property
     property int contentsMargin: isMDI ? 2 : 1
     property int titleBarContentsMargin: 1
     property int mouseResizeMargin: 8
     readonly property bool isMDI: groupCpp && groupCpp.isMDI
-    readonly property bool resizeAllowed: root.isMDI && !_kddwHelpers.isDragging && _kddwDockRegistry && (!_kddwHelpers.groupViewInMDIResize || _kddwHelpers.groupViewInMDIResize === groupCpp)
+    readonly property bool resizeAllowed: root.isMDI && !Singletons.helpers.isDragging && Singletons.dockRegistry && (!Singletons.helpers.groupViewInMDIResize || Singletons.helpers.groupViewInMDIResize === groupCpp)
     property alias tabBarHeight: tabbar.height
     readonly property bool hasCustomMouseEventRedirector: false
     readonly property bool isFixedHeight: groupCpp && groupCpp.isFixedHeight
     readonly property bool isFixedWidth: groupCpp && groupCpp.isFixedWidth
+    readonly property bool tabsAtTop: !groupCpp || !groupCpp.tabsAtBottom
 
     anchors.fill: parent
 
@@ -52,7 +51,6 @@ Rectangle {
 
     MouseArea {
         anchors.fill: parent
-
 
         MDIResizeHandlerHelper {
             anchors {
@@ -103,7 +101,7 @@ Rectangle {
             anchors {
                 right: parent ? parent.right : undefined
                 left: parent ? parent.left : undefined
-                bottom: parent ?  parent.bottom : undefined
+                bottom: parent ? parent.bottom : undefined
             }
 
             height: resizeMargin
@@ -131,8 +129,8 @@ Rectangle {
 
         MDIResizeHandlerHelper {
             anchors {
-                left:  parent ? parent.left : undefined
-                top:  parent ? parent.top : undefined
+                left: parent ? parent.left : undefined
+                top: parent ? parent.top : undefined
             }
 
             height: width
@@ -178,11 +176,10 @@ Rectangle {
     Loader {
         id: titleBar
         readonly property QtObject titleBarCpp: root.titleBarCpp
-        source: groupCpp ? _kddw_widgetFactory.titleBarFilename()
-                         : ""
+        source: root.groupCpp ? Singletons.widgetFactory.titleBarFilename() : ""
 
         anchors {
-            top:  parent ? parent.top : undefined
+            top: parent ? parent.top : undefined
             left: parent ? parent.left : undefined
             right: parent ? parent.right : undefined
             topMargin: root.titleBarContentsMargin
@@ -193,18 +190,26 @@ Rectangle {
 
     Loader {
         id: tabbar
-        readonly property QtObject groupCpp: root.groupCpp
+        readonly property GroupView groupCpp: root.groupCpp
         readonly property bool hasCustomMouseEventRedirector: root.hasCustomMouseEventRedirector
 
-        source: groupCpp ? _kddw_widgetFactory.tabbarFilename()
-                         : ""
+        source: groupCpp ? Singletons.widgetFactory.tabbarFilename() : ""
+
+        function topAnchor() {
+            if (root.tabsAtTop) {
+                return (titleBar && titleBar.visible) ? titleBar.bottom : (parent ? parent.top : undefined);
+            } else {
+                return undefined;
+            }
+        }
 
         anchors {
             left: parent ? parent.left : undefined
             right: parent ? parent.right : undefined
-            top: (titleBar && titleBar.visible) ? titleBar.bottom
-                                                : (parent ? parent.top : undefined)
-            topMargin: 1
+            top: topAnchor()
+            bottom: root.tabsAtTop ? undefined : parent.bottom
+
+            // 1 pixel gap so we don't overlap with outer frame. We shouldn't hardcode this though
             leftMargin: 1
             rightMargin: 1
         }
@@ -212,12 +217,22 @@ Rectangle {
 
     Item {
         id: stackLayout
+
+        function bottomAnchor() {
+            if (!parent)
+                return undefined;
+
+            if (root.tabsAtTop || !tabbar.visible)
+                return parent.bottom;
+
+            return tabbar.top;
+        }
+
         anchors {
             left: parent ? parent.left : undefined
             right: parent ? parent.right : undefined
-            top: (parent && tabbar.visible) ? tabbar.bottom : ((titleBar && titleBar.visible) ? titleBar.bottom
-                                                                                              : parent ? parent.top : undefined)
-            bottom: parent ? parent.bottom : undefined
+            top: (parent && tabbar.visible && root.tabsAtTop) ? tabbar.bottom : ((titleBar && titleBar.visible) ? titleBar.bottom : parent ? parent.top : undefined)
+            bottom: bottomAnchor()
 
             leftMargin: root.contentsMargin
             rightMargin: root.contentsMargin

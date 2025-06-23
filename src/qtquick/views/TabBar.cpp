@@ -19,6 +19,7 @@
 
 #include "TabBar.h"
 #include "Stack.h"
+#include "Config.h"
 #include "core/DockWidget_p.h"
 #include "kddockwidgets/core/TabBar.h"
 #include "kddockwidgets/core/Stack.h"

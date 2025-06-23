@@ -9,35 +9,42 @@
   Contact KDAB at <info@kdab.com> for commercial licensing options.
 */
 
-#include "../simple_test_framework.h"
+#include "../utils.h"
 #include "core/DropArea.h"
 #include "core/Group.h"
 #include "Config.h"
 #include "core/DockWidget.h"
 #include "core/ViewFactory.h"
 #include "core/Platform.h"
-#include "tests/utils.h"
+
+#include <QTest>
 
 using namespace KDDockWidgets;
+using namespace KDDockWidgets::Core;
 
-KDDW_QCORO_TASK tst_dropAreaCtor()
+class TestDropArea : public QObject
+{
+    Q_OBJECT
+private Q_SLOTS:
+    void tst_dropAreaCtor();
+    void tst_addWidget();
+    void tst_addWidgetHidden();
+};
+
+void TestDropArea::tst_dropAreaCtor()
 {
     // Tests that ctor runs and doesn't leak
     Core::DropArea da(nullptr, {});
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_addWidget()
+void TestDropArea::tst_addWidget()
 {
     auto group = new Core::Group();
     Core::DropArea da(nullptr, {});
     da.addWidget(group->view(), KDDockWidgets::Location_OnLeft);
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_addWidgetHidden()
+void TestDropArea::tst_addWidgetHidden()
 {
     // Test adding a widget that starts hidden
 
@@ -46,23 +53,18 @@ KDDW_QCORO_TASK tst_addWidgetHidden()
     da.addDockWidget(dw, KDDockWidgets::Location_OnLeft, nullptr,
                      InitialVisibilityOption::StartHidden);
 
-    CHECK(!dw->isOpen());
-    CHECK(!dw->toggleAction()->isChecked());
+    QVERIFY(!dw->isOpen());
+    QVERIFY(!dw->toggleAction()->isChecked());
     dw->open();
-    CHECK(dw->isOpen());
-    CHECK(dw->toggleAction()->isChecked());
+    QVERIFY(dw->isOpen());
+    QVERIFY(dw->toggleAction()->isChecked());
 
     auto group = dw->dptr()->group();
     delete dw;
-    KDDW_CO_AWAIT Core::Platform::instance()->tests_waitForDeleted(group);
-
-    KDDW_TEST_RETURN(true);
+    WAIT_FOR_DELETED(group);
 }
 
-static const auto s_tests = std::vector<KDDWTest> {
-    TEST(tst_dropAreaCtor),
-    TEST(tst_addWidget),
-    TEST(tst_addWidgetHidden)
-};
+#define KDDW_TEST_NAME TestDropArea
+#include "../test_main_qt.h"
 
-#include "../tests_main.h"
+#include "tst_droparea.moc"

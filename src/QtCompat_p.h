@@ -13,7 +13,12 @@
 
 // The goal of this file is to provide fallback types for non-Qt frontends such as Flutter
 
-#ifdef KDDW_FRONTEND_QT
+#if defined(KDDW_FRONTEND_QT) || defined(KDDW_FLUTTER_QWINDOW)
+// Qt uses QtGui, and Flutter optionally can
+#define KDDW_QTGUI_TYPES
+#endif
+
+#ifdef KDDW_QTGUI_TYPES
 
 #include <QCloseEvent>
 #include <QMouseEvent>
@@ -28,10 +33,6 @@
 
 #else
 
-#ifdef KDDW_FRONTEND_FLUTTER
-#include "flutter/qcoro.h"
-#endif
-
 #include "qtcompat/geometry_helpers_p.h"
 #include "qtcompat/enums_p.h"
 #include "qtcompat/string_p.h"
@@ -39,11 +40,11 @@
 #include "kdtoolbox/KDStlContainerAdaptor.h"
 #include <cstdint>
 
-#endif // !Qt
+#endif
 
 namespace KDDockWidgets {
 
-#ifdef KDDW_FRONTEND_QT
+#ifdef KDDW_QTGUI_TYPES
 
 using Polygon = QPolygon;
 using Icon = QIcon;
@@ -287,14 +288,7 @@ public:
 
 }
 
-#ifndef KDDW_FRONTEND_FLUTTER
-// Only the flutter uses the coroutines
-#define KDDW_QCORO_TASK bool
-#define KDDW_CO_AWAIT
-#define KDDW_CO_RETURN return
-#endif
-
-#ifndef KDDW_FRONTEND_QT
+#ifndef KDDW_QTGUI_TYPES
 
 // Dummy Qt macros, to avoid too much ifdefs in core/
 #define Q_NAMESPACE

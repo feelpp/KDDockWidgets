@@ -58,7 +58,7 @@ public:
     bool isWindow() const override;
 
     void onMousePress(Point localPos);
-    void onMouseDoubleClick(Point localPos);
+    bool onMouseDoubleClick(Point localPos);
 
     ///@brief returns whether there's only 1 tab
     bool hasSingleDockWidget() const;
@@ -67,7 +67,7 @@ public:
 
     bool tabsAreMovable() const;
 
-    DockWidget *singleDockWidget() const override final;
+    DockWidget *singleDockWidget() const final;
 
     /// @reimp
     bool isMDI() const override;

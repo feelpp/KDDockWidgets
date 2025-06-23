@@ -11,6 +11,14 @@
 
 #pragma once
 
+#ifdef KDDW_FLUTTER_QWINDOW
+
+#include <QRect>
+#include <QSize>
+#include <QPoint>
+
+#else
+
 #include <cmath>
 #include <algorithm>
 
@@ -67,12 +75,12 @@ public:
 
     Size expandedTo(Size sz) const
     {
-        return { std::max(m_width, sz.m_width), std::max(m_height, sz.height()) };
+        return { ( std::max )(m_width, sz.m_width), ( std::max )(m_height, sz.height()) };
     }
 
     Size boundedTo(Size sz) const
     {
-        return { std::min(m_width, sz.m_width), std::min(m_height, sz.height()) };
+        return { ( std::min )(m_width, sz.m_width), ( std::min )(m_height, sz.height()) };
     }
 
     bool operator==(Size other) const
@@ -199,11 +207,6 @@ public:
         , m_size(Size(width, height))
     {
     }
-
-    Point pos() const
-    {
-        return m_pos;
-    };
 
     Size size() const
     {
@@ -360,13 +363,13 @@ public:
 
     Rect intersected(Rect other) const
     {
-        const int maxLeft = std::max(x(), other.x());
-        const int minRight = std::min(right(), other.right());
+        const int maxLeft = ( std::max )(x(), other.x());
+        const int minRight = ( std::min )(right(), other.right());
         if (maxLeft > minRight)
             return Rect();
 
-        const int maxTop = std::max(y(), other.y());
-        const int minBottom = std::min(bottom(), other.bottom());
+        const int maxTop = ( std::max )(y(), other.y());
+        const int minBottom = ( std::min )(bottom(), other.bottom());
         if (maxTop > minBottom)
             return Rect();
 
@@ -496,3 +499,5 @@ inline void Rect::adjust(int l, int t, int r, int b)
 }
 
 }
+
+#endif

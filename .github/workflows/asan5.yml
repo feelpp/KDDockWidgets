@@ -2,11 +2,17 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only
 
-name: Nightly ASAN Qt5
+name: ASAN Qt5
 
 on:
-  schedule:
-  - cron: '0 3 * * *'
+  push:
+    branches:
+      - main
+      - 2.2
+  pull_request:
+    branches:
+      - main
+      - 2.2
   workflow_dispatch:
 
 jobs:
@@ -21,7 +27,7 @@ jobs:
 
     steps:
       - name: Install Qt ${{ matrix.preset.qt_version }}
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
           version: ${{ matrix.preset.qt_version }}
           cache: true
@@ -46,7 +52,7 @@ jobs:
              sudo sysctl vm.mmap_rnd_compat_bits=8
 
       - name: Run tests on Linux (offscreen)
-        run: ctest --test-dir ./build-${{ matrix.preset.name }} --output-on-failure
+        run: ctest --test-dir ./build-${{ matrix.preset.name }} --output-on-failure -j 4
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software

@@ -36,7 +36,7 @@ using namespace KDDockWidgets::Core;
 namespace KDDockWidgets {
 static qint64 s_nextId = 1;
 
-Controller *maybeCreateController(Controller *controller, ViewType type, View *view)
+static Controller *maybeCreateController(Controller *controller, ViewType type, View *view)
 {
     if (controller)
         return controller;
@@ -58,7 +58,7 @@ View::View(Controller *controller, ViewType type)
 View::~View()
 {
     m_inDtor = true;
-    d->beingDestroyed.emit();
+    safeEmitSignal(d->beingDestroyed);
 
     if (!d->freed() && !View::is(ViewType::ViewWrapper) && !View::is(ViewType::DropAreaIndicatorOverlay)) {
         // Views should be deleted via View::free()!
@@ -405,7 +405,12 @@ Controller *View::Private::firstParentOfType(ViewType type) const
 
 void View::Private::requestClose(CloseEvent *e)
 {
+    if (m_emittingClose)
+        return;
+
+    m_emittingClose = true;
     closeRequested.emit(e);
+    m_emittingClose = false;
 }
 
 Rect View::Private::globalGeometry() const
@@ -500,4 +505,13 @@ bool View::deliverViewEventToFilters(Event *ev)
     }
 
     return false;
+}
+
+void View::Private::emitLayoutInvalidated()
+{
+    if (m_emittingLayoutInvalidated)
+        return;
+    m_emittingLayoutInvalidated = true;
+    layoutInvalidated.emit();
+    m_emittingLayoutInvalidated = false;
 }

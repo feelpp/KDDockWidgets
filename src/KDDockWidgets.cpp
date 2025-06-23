@@ -12,7 +12,6 @@
 #include "Config.h"
 #include "kddockwidgets/KDDockWidgets.h"
 #include "core/layouting/Item_p.h"
-#include "core/Platform.h"
 
 #ifdef KDDW_FRONTEND_QTWIDGETS
 #include "qtwidgets/Platform.h"
@@ -22,11 +21,9 @@
 #include "qtquick/Platform.h"
 #endif
 
-#ifdef KDDW_FRONTEND_FLUTTER
-#include "flutter/Platform.h"
-#endif
-
 using namespace KDDockWidgets;
+
+#ifdef KDDW_FRONTEND_QT
 
 void KDDockWidgets::initFrontend(FrontendType type)
 {
@@ -50,9 +47,11 @@ void KDDockWidgets::initFrontend(FrontendType type)
     }
 }
 
+#endif
+
 const char *KDDockWidgets::spdlogLoggerName()
 {
-    return "com.kdab.kddockwidgets";
+    return "com.kdab.dockwidgets";
 }
 
 NeighbourSqueezeStrategy InitialOption::s_defaultNeighbourSqueezeStrategy = NeighbourSqueezeStrategy::AllNeighbours;

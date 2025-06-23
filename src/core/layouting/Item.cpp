@@ -30,7 +30,9 @@
 #include <QTimer>
 #endif
 
-#define LAYOUT_DUMP_INDENT 6
+enum {
+    LAYOUT_DUMP_INDENT = 6
+};
 
 #ifdef Q_CC_MSVC
 #pragma warning(push)
@@ -59,17 +61,31 @@ Size Core::Item::hardcodedMaximumSize = Size(16777215, 16777215);
 bool Core::ItemBoxContainer::s_inhibitSimplify = false;
 LayoutingSeparator *LayoutingSeparator::s_separatorBeingDragged = nullptr;
 
-inline bool locationIsVertical(Location loc)
+
+template<typename Signal, typename... Args>
+void safeEmitSignal(Signal &sig, Args &&...args)
+{
+    // KDBindings now can throw exceptions.
+    // we emit some signals in destructors, which should never throw.
+    // this makes clang-tidy happy. In practice there's no throwing.
+    try {
+        sig.emit(std::forward<Args>(args)...);
+    } catch (...) {
+        KDDW_ERROR("Got exception in signal emit!");
+    }
+}
+
+static bool locationIsVertical(Location loc)
 {
     return loc == Location_OnTop || loc == Location_OnBottom;
 }
 
-inline bool locationIsSide1(Location loc)
+static bool locationIsSide1(Location loc)
 {
     return loc == Location_OnLeft || loc == Location_OnTop;
 }
 
-inline Qt::Orientation orientationForLocation(Location loc)
+static Qt::Orientation orientationForLocation(Location loc)
 {
     switch (loc) {
     case Location_OnLeft:
@@ -84,12 +100,12 @@ inline Qt::Orientation orientationForLocation(Location loc)
     return Qt::Vertical;
 }
 
-inline Qt::Orientation oppositeOrientation(Qt::Orientation o)
+static Qt::Orientation oppositeOrientation(Qt::Orientation o)
 {
     return o == Qt::Vertical ? Qt::Horizontal : Qt::Vertical;
 }
 
-inline Rect adjustedRect(Rect r, Qt::Orientation o, int p1, int p2)
+static Rect adjustedRect(Rect r, Qt::Orientation o, int p1, int p2)
 {
     if (o == Qt::Vertical) {
         r.adjust(0, p1, 0, p2);
@@ -118,7 +134,7 @@ struct LengthOnSide
 };
 
 
-NeighbourSqueezeStrategy defaultNeighbourSqueezeStrategy()
+static NeighbourSqueezeStrategy defaultNeighbourSqueezeStrategy()
 {
     return InitialOption::s_defaultNeighbourSqueezeStrategy;
 }
@@ -828,13 +844,6 @@ bool Item::checkSanity()
             return false;
         }
 
-#if 0 // if guest is explicitly hidden we're not hiding the item yet. And probably won't
-        if (!m_guest->isVisible() && (!m_guest->parent() || m_guest->parentWidget()->isVisible())) {
-
-            KDDW_ERROR("Guest widget isn't visible {}", this);
-            return false;
-        }
-#endif
         // Reminder: m_guest->geometry() is in the coordspace of the host widget (DropArea)
         // while Item::m_sizingInfo.geometry is in the coordspace of the parent container
 
@@ -954,13 +963,13 @@ Item::Item(bool isContainer, LayoutingHost *hostWidget, ItemContainer *parent)
 Item::~Item()
 {
     m_inDtor = true;
-    aboutToBeDeleted.emit();
+    safeEmitSignal(aboutToBeDeleted);
 
     m_minSizeChangedHandle.disconnect();
     m_visibleChangedHandle.disconnect();
     m_parentChangedConnection.disconnect();
 
-    deleted.emit();
+    safeEmitSignal(deleted);
 }
 
 void Item::turnIntoPlaceholder()
@@ -2094,11 +2103,52 @@ void ItemBoxContainer::Private::resizeChildren(Size oldSize, Size newSize,
 
     const Vector<double> childPercentages = this->childPercentages();
     const auto count = childSizes.count();
-    const bool widthChanged = oldSize.width() != newSize.width();
-    const bool heightChanged = oldSize.height() != newSize.height();
-    const bool lengthChanged =
-        (q->isVertical() && heightChanged) || (q->isHorizontal() && widthChanged);
+    const bool widthChanged_ = oldSize.width() != newSize.width();
+    const bool heightChanged_ = oldSize.height() != newSize.height();
+    const bool lengthChanged_ =
+        (q->isVertical() && heightChanged_) || (q->isHorizontal() && widthChanged_);
     const int totalNewLength = q->usableLength();
+
+    std::function<int(const Item::List &)> indexOfCentralFrame;
+    indexOfCentralFrame = [&indexOfCentralFrame](const Item::List &children) -> int {
+        for (auto *child : children) {
+            const auto *guest = child->guest();
+            const bool isCentralFrame = guest && (guest->flags() & IsCentralFrame);
+            if (isCentralFrame) {
+                return children.indexOf(child);
+            } else if (child->isContainer()) {
+                auto container = dynamic_cast<ItemBoxContainer *>(child);
+                int index = indexOfCentralFrame(container->visibleChildren());
+                if (index != -1)
+                    return children.indexOf(child);
+            }
+        }
+        return -1;
+    };
+
+    if (strategy == ChildrenResizeStrategy::GiveDropAreaWithCentralFrameAllExtra) {
+        auto children = q->visibleChildren();
+        int index = children.count() > 1 ? indexOfCentralFrame(children) : -1;
+        if (index == -1) {
+            strategy = ChildrenResizeStrategy::Percentage;
+        } else {
+            int remaining = totalNewLength;
+            for (int i = 0; i < count; ++i) {
+                const bool isCentralFrame = i == index;
+                if (isCentralFrame)
+                    continue;
+
+                const SizingInfo &itemSize = childSizes[i];
+                remaining -= itemSize.length(q->orientation());
+            }
+            SizingInfo &itemSize = childSizes[index];
+            if (q->isVertical()) {
+                itemSize.geometry.setSize({ q->width(), remaining });
+            } else {
+                itemSize.geometry.setSize({ remaining, q->height() });
+            }
+        }
+    }
 
     if (strategy == ChildrenResizeStrategy::Percentage) {
         // In this strategy mode, each children will preserve its current relative size. So, if a
@@ -2112,7 +2162,7 @@ void ItemBoxContainer::Private::resizeChildren(Size oldSize, Size newSize,
             SizingInfo &itemSize = childSizes[i];
 
             const double childPercentage = childPercentages.at(i);
-            const int newItemLength = lengthChanged
+            const int newItemLength = lengthChanged_
                 ? (isLast ? remaining : int(childPercentage * totalNewLength))
                 : itemSize.length(m_orientation);
 
@@ -2222,6 +2272,7 @@ void ItemBoxContainer::Private::honourMaxSizes(SizingInfo::List &sizes)
         // Each grower will grow a bit (round-robin)
         auto toGrow = std::max(1, amountAvailableToGrow / int(indexesOfGrowers.size()));
 
+        // TODO: Use cbegin/cend once we drop Qt 5
         for (auto it = indexesOfGrowers.begin(); it != indexesOfGrowers.end();) {
             const int index = *it;
             SizingInfo &sizing = sizes[index];
@@ -2236,7 +2287,7 @@ void ItemBoxContainer::Private::honourMaxSizes(SizingInfo::List &sizes)
 
             if (sizing.availableToGrow(m_orientation) == 0) {
                 // It's no longer a grower
-                it = indexesOfGrowers.erase(it);
+                it = indexesOfGrowers.erase(it); // clazy:exclude=strict-iterators
             } else {
                 it++;
             }
@@ -2248,6 +2299,7 @@ void ItemBoxContainer::Private::honourMaxSizes(SizingInfo::List &sizes)
         // Each shrinker will shrink a bit (round-robin)
         auto toShrink = std::max(1, amountNeededToShrink / int(indexesOfShrinkers.size()));
 
+        // TODO: Use cbegin/cend once we drop Qt 5
         for (auto it = indexesOfShrinkers.begin(); it != indexesOfShrinkers.end();) {
             const int index = *it;
             SizingInfo &sizing = sizes[index];
@@ -2262,7 +2314,7 @@ void ItemBoxContainer::Private::honourMaxSizes(SizingInfo::List &sizes)
 
             if (sizing.neededToShrink(m_orientation) == 0) {
                 // It's no longer a shrinker
-                it = indexesOfShrinkers.erase(it);
+                it = indexesOfShrinkers.erase(it); // clazy:exclude=strict-iterators
             } else {
                 it++;
             }
@@ -2989,11 +3041,11 @@ void ItemBoxContainer::growNeighbours(Item *side1Neighbour, Item *side2Neighbour
 
         if (isVertical()) {
             const int available = geo2.y() - geo1.bottom() - layoutSpacing;
-            geo1.setHeight(geo1.height() + available / 2);
+            geo1.setHeight(geo1.height() + (available / 2));
             geo2.setTop(geo1.bottom() + layoutSpacing + 1);
         } else {
             const int available = geo2.x() - geo1.right() - layoutSpacing;
-            geo1.setWidth(geo1.width() + available / 2);
+            geo1.setWidth(geo1.width() + (available / 2));
             geo2.setLeft(geo1.right() + layoutSpacing + 1);
         }
 
@@ -3196,6 +3248,7 @@ Vector<int> ItemBoxContainer::calculateSqueezes(
     NeighbourSqueezeStrategy strategy, bool reversed) const
 {
     Vector<int> availabilities;
+    availabilities.reserve(std::distance(begin, end));
     for (auto it = begin; it < end; ++it) {
         availabilities.push_back(it->availableLength(d->m_orientation));
     }
@@ -3227,7 +3280,7 @@ Vector<int> ItemBoxContainer::calculateSqueezes(
                 const int available = availabilities.at(i);
                 if (available == 0)
                     continue;
-                const int took = std::min(missing, std::min(toTake, available));
+                const int took = std::min({ missing, toTake, available });
                 availabilities[i] -= took;
                 missing -= took;
                 squeezes[i] += took;
@@ -4338,8 +4391,8 @@ void LayoutingHost::insertItemRelativeTo(Core::LayoutingGuest *guest, Core::Layo
         return;
     }
 
-    if (auto box = m_rootItem->asBoxContainer())
-        box->insertItemRelativeTo(guest->layoutItem(), relativeTo->layoutItem(), loc, initialOption);
+    if (m_rootItem->asBoxContainer())
+        ItemBoxContainer::insertItemRelativeTo(guest->layoutItem(), relativeTo->layoutItem(), loc, initialOption);
 }
 
 #ifdef Q_CC_MSVC

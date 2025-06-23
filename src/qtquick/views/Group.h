@@ -37,13 +37,16 @@ class Stack;
 class DOCKS_EXPORT Group : public QtQuick::View, public Core::GroupViewInterface
 {
     Q_OBJECT
-    Q_PROPERTY(QObject *tabBar READ tabBarObj CONSTANT)
+    QML_NAMED_ELEMENT(GroupView)
+    QML_UNCREATABLE("Created by the framework only.")
+    Q_PROPERTY(KDDockWidgets::QtQuick::TabBar *tabBar READ tabBarObj CONSTANT)
     Q_PROPERTY(KDDockWidgets::QtQuick::TitleBar *titleBar READ titleBar CONSTANT)
     Q_PROPERTY(int userType READ userType CONSTANT)
     Q_PROPERTY(KDDockWidgets::QtQuick::TitleBar *actualTitleBar READ actualTitleBar NOTIFY
                    actualTitleBarChanged)
     Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentDockWidgetChanged)
     Q_PROPERTY(bool isMDI READ isMDI NOTIFY isMDIChanged)
+    Q_PROPERTY(bool tabsAtBottom READ tabsAtBottom CONSTANT)
 
 public:
     explicit Group(Core::Group *controller, QQuickItem *parent = nullptr);
@@ -59,16 +62,20 @@ public:
     QQuickItem *visualItem() const override;
 
     int currentIndex() const;
+    bool tabsAtBottom() const;
 
     // QML interface:
     KDDockWidgets::QtQuick::TitleBar *titleBar() const;
     KDDockWidgets::QtQuick::TitleBar *actualTitleBar() const;
     int userType() const;
-    QObject *tabBarObj() const;
+    QtQuick::TabBar *tabBarObj() const;
 
     /// Sets the size of this group in the MDI layout
     Q_INVOKABLE void setMDISize(QSize);
 
+    /// Convenience that just calls close() on all its dock widgets
+    /// Returns whether all dock widgets accepted the close
+    Q_INVOKABLE bool closeAllDockWidgets();
 
 protected:
     void removeDockWidget(Core::DockWidget *dw) override;
@@ -91,7 +98,7 @@ public Q_SLOTS:
     void updateConstraints();
 
 private:
-    void init() override final;
+    void init() final;
     Stack *stackView() const;
     TabBar *tabBarView() const;
 

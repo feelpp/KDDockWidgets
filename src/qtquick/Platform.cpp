@@ -48,7 +48,7 @@ static void initResources()
 using namespace KDDockWidgets;
 using namespace KDDockWidgets::QtQuick;
 
-inline QQuickItem *mouseAreaForPos(QQuickItem *item, QPointF globalPos)
+static QQuickItem *mouseAreaForPos(QQuickItem *item, QPointF globalPos)
 {
     QRectF rect = item->boundingRect();
     rect.moveTopLeft(item->mapToGlobal(QPointF(0, 0)));
@@ -83,7 +83,10 @@ void Platform::init()
     initResources();
 #endif
 
+#ifndef KDDW_QML_MODULE
     KDDockWidgets::registerQmlTypes();
+#endif
+
     QQuickWindow::setDefaultAlphaBuffer(true);
 
     qGuiApp->connect(qApp, &QGuiApplication::focusObjectChanged, qApp, [this](QObject *obj) {
@@ -182,8 +185,21 @@ void Platform::setQmlEngine(QQmlEngine *qmlEngine)
     QQmlContext *context = qmlEngine->rootContext();
     context->setContextProperty(QStringLiteral("_kddwHelpers"), m_qquickHelpers);
     context->setContextProperty(QStringLiteral("_kddwDockRegistry"), dr);
-    context->setContextProperty(QStringLiteral("_kddw_widgetFactory"),
-                                Config::self().viewFactory());
+    updateViewFactoryContextProperty();
+}
+
+void Platform::updateViewFactoryContextProperty()
+{
+    if (!m_qmlEngine)
+        return;
+
+    m_qmlEngine->rootContext()->setContextProperty(QStringLiteral("_kddw_widgetFactory"),
+                                                   Config::self().viewFactory());
+}
+
+void Platform::onViewFactoryChanged()
+{
+    updateViewFactoryContextProperty();
 }
 
 ViewFactory *Platform::viewFactory() const
@@ -249,4 +265,9 @@ Core::DockWidget *Platform::dockWidgetForItem(QQuickItem *item)
             return view->dockWidget();
 
     return nullptr;
+}
+
+QtQuickHelpers *Platform::helpers() const
+{
+    return m_qquickHelpers;
 }

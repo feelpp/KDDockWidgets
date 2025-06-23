@@ -23,6 +23,8 @@
 using namespace KDDockWidgets;
 using namespace KDDockWidgets::QtQuick;
 
+IndicatorWindowCreationCallback KDDockWidgets::QtQuick::IndicatorWindow::s_quickWindowCreationCallback = {};
+
 namespace KDDockWidgets {
 
 static QString iconName(DropLocation loc, bool active)
@@ -202,6 +204,9 @@ IndicatorWindow::IndicatorWindow()
 {
     setFlags(flags() | Qt::FramelessWindowHint | Qt::BypassWindowManagerHint | Qt::Tool);
     setColor(Qt::transparent);
+
+    if (s_quickWindowCreationCallback)
+        s_quickWindowCreationCallback(this);
 }
 
 IndicatorWindow::~IndicatorWindow() = default;
@@ -230,9 +235,19 @@ void IndicatorWindow::init(const QUrl &rootQml)
     }
 }
 
+/** static */
+void IndicatorWindow::setQuickWindowCreationCallback(const IndicatorWindowCreationCallback &callback)
+{
+    s_quickWindowCreationCallback = callback;
+}
+
 QUrl ClassicDropIndicatorOverlay::qmlSouceUrl() const
 {
+#ifdef KDDW_QML_MODULE
+    return QUrl(QStringLiteral("qrc:/qt/qml/com/kdab/dockwidgets/ClassicIndicatorsOverlay.qml"));
+#else
     return QUrl(QStringLiteral("qrc:/kddockwidgets/qtquick/views/qml/ClassicIndicatorsOverlay.qml"));
+#endif
 }
 
 QQuickItem *ClassicDropIndicatorOverlay::indicatorForLocation(DropLocation loc) const

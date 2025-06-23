@@ -10,18 +10,19 @@
 */
 
 import QtQuick 2.9
-import QtQuick.Controls 2.9
+
+import com.kdab.dockwidgets 2.0
 
 Item {
     id: root
 
-    readonly property bool hasCustomMouseEventRedirector: parent.hasCustomMouseEventRedirector
+    readonly property bool hasCustomMouseEventRedirector: parent.hasCustomMouseEventRedirector // qmllint disable missing-property
 
     /// This is our C++ Group.cpp view
-    readonly property QtObject groupCpp: parent.groupCpp
+    readonly property GroupView groupCpp: parent.groupCpp // qmllint disable missing-property
 
     /// This is our C++ TabBar.cpp view
-    readonly property QtObject tabBarCpp: groupCpp ? groupCpp.tabBar : null
+    readonly property TabBarView tabBarCpp: groupCpp ? groupCpp.tabBar : null
 
     /// The number of tabs
     readonly property int count: tabBarCpp ? tabBarCpp.dockWidgetModel.count : 0
@@ -50,7 +51,7 @@ Item {
     Connections {
         target: root.groupCpp
         function onCurrentIndexChanged() {
-            root.currentTabIndex =  groupCpp.currentIndex;
+            root.currentTabIndex = root.groupCpp.currentIndex;
         }
     }
 
@@ -65,7 +66,7 @@ Item {
     onTabBarCppChanged: {
         if (tabBarCpp) {
             if (!root.hasCustomMouseEventRedirector)
-                tabBarCpp.redirectMouseEvents(tabBarDragMouseArea)
+                tabBarCpp.redirectMouseEvents(tabBarDragMouseArea);
 
             // Setting just so the unit-tests can access the buttons
             tabBarCpp.tabBarQmlItem = this;

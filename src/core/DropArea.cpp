@@ -48,7 +48,12 @@ createDropIndicatorOverlay(Core::DropArea *dropArea)
     case DropIndicatorType::Classic:
         return new Core::ClassicDropIndicatorOverlay(dropArea);
     case DropIndicatorType::Segmented:
-        return new Core::SegmentedDropIndicatorOverlay(dropArea);
+        if (Platform::instance()->isQtWidgets()) {
+            return new Core::SegmentedDropIndicatorOverlay(dropArea);
+        } else {
+            KDDW_ERROR("Only QtWidget backend supports segmented drop indicators");
+            return new Core::ClassicDropIndicatorOverlay(dropArea);
+        }
     case DropIndicatorType::None:
         return new Core::NullDropIndicatorOverlay(dropArea);
     }
@@ -415,7 +420,15 @@ bool DropArea::drop(WindowBeingDragged *draggedWindow, Core::Group *acceptingGro
         const bool isEGLFSRootWindow =
             isEGLFS() && (view()->window()->isFullScreen() || window()->isMaximized());
         if (!isEGLFSRootWindow)
+#ifdef Q_OS_MACOS
+            // On macOS there's weird flashing ( #608 ) when activating the main window.
+            // It's unneeded there, as the main window is always raised when we drag a floating window
+            // (unlike other platforms), so OK to skip it here.
+            if (!isInMainWindow())
+                view()->raiseAndActivate();
+#else
             view()->raiseAndActivate();
+#endif
 
         if (needToFocusNewlyDroppedWidgets) {
             // Let's also focus the newly dropped dock widget
@@ -505,7 +518,7 @@ Core::Group *DropArea::createCentralGroup(MainWindowOptions options)
 {
     Core::Group *group = nullptr;
 
-    if (options & MainWindowOption_HasCentralFrame) {
+    if (options & MainWindowOption_HasCentralGroup) {
         FrameOptions groupOptions = FrameOption_IsCentralFrame;
         const bool hasPersistentCentralWidget =
             (options & MainWindowOption_HasCentralWidget) == MainWindowOption_HasCentralWidget;

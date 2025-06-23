@@ -75,7 +75,7 @@ public:
 
     // Draggable interface
     std::unique_ptr<WindowBeingDragged> makeWindow() override;
-    DockWidget *singleDockWidget() const override final;
+    DockWidget *singleDockWidget() const final;
     bool isWindow() const override;
     bool isMDI() const override;
     bool isPositionDraggable(Point p) const override;
@@ -91,6 +91,8 @@ public:
     /// Only relevant with Flag_ShowButtonsOnTabBarIfTitleBarHidden
     void setHideDisabledButtons(TitleBarButtonTypes);
     bool buttonHidesIfDisabled(TitleBarButtonType) const;
+
+    bool dragCanStart(Point pressPos, Point pos) const override;
 
 public:
     bool onMouseDoubleClick(Point localPos);

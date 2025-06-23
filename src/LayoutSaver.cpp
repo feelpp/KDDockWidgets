@@ -66,10 +66,10 @@ using namespace KDDockWidgets::Core;
 
 std::map<QString, LayoutSaver::DockWidget::Ptr> LayoutSaver::DockWidget::s_dockWidgets;
 LayoutSaver::Layout *LayoutSaver::Layout::s_currentLayoutBeingRestored = nullptr;
-std::unordered_map<QString, std::shared_ptr<KDDockWidgets::Position>> LayoutSaver::Private::s_unrestoredPositions;
+std::unordered_map<QString, std::shared_ptr<KDDockWidgets::Positions>> LayoutSaver::Private::s_unrestoredPositions;
 std::unordered_map<QString, CloseReason> LayoutSaver::Private::s_unrestoredProperties;
 
-inline InternalRestoreOptions internalRestoreOptions(RestoreOptions options)
+static InternalRestoreOptions internalRestoreOptions(RestoreOptions options)
 {
     InternalRestoreOptions ret = {};
     if (options.testFlag(RestoreOption_RelativeToMainWindow)) {
@@ -94,7 +94,7 @@ bool LayoutSaver::Private::s_restoreInProgress = false;
 namespace KDDockWidgets {
 
 template<typename T>
-T jsonValue(const nlohmann::json &json, const char *name, const T &defaultValue)
+static T jsonValue(const nlohmann::json &json, const char *name, const T &defaultValue)
 {
     try {
         // value can throw if the type has "null" value, for instance.
@@ -105,14 +105,14 @@ T jsonValue(const nlohmann::json &json, const char *name, const T &defaultValue)
 }
 
 template<typename Type>
-void to_json(nlohmann::json &json, const typename Type::List &list)
+static void to_json(nlohmann::json &json, const typename Type::List &list)
 {
     for (const auto &l : list) {
         json.push_back(l);
     }
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::Group &f)
+static void to_json(nlohmann::json &json, const LayoutSaver::Group &f)
 {
     json["id"] = f.id;
     json["isNull"] = f.isNull;
@@ -123,7 +123,8 @@ void to_json(nlohmann::json &json, const LayoutSaver::Group &f)
     json["mainWindowUniqueName"] = f.mainWindowUniqueName;
     json["dockWidgets"] = dockWidgetNames(f.dockWidgets);
 }
-void from_json(const nlohmann::json &json, LayoutSaver::Group &f)
+
+static void from_json(const nlohmann::json &json, LayoutSaver::Group &f)
 {
     f.id = jsonValue(json, "id", QString());
     f.isNull = jsonValue(json, "isNull", true);
@@ -146,7 +147,7 @@ void from_json(const nlohmann::json &json, LayoutSaver::Group &f)
     }
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::MultiSplitter &s)
+static void to_json(nlohmann::json &json, const LayoutSaver::MultiSplitter &s)
 {
     json["layout"] = s.layout;
     auto &groups = json["frames"];
@@ -156,7 +157,7 @@ void to_json(nlohmann::json &json, const LayoutSaver::MultiSplitter &s)
     }
 }
 
-void from_json(const nlohmann::json &json, LayoutSaver::MultiSplitter &s)
+static void from_json(const nlohmann::json &json, LayoutSaver::MultiSplitter &s)
 {
     s.groups.clear();
     s.layout = jsonValue(json, "layout", nlohmann::json::object());
@@ -177,7 +178,7 @@ void from_json(const nlohmann::json &json, LayoutSaver::MultiSplitter &s)
     }
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::MainWindow &mw)
+static void to_json(nlohmann::json &json, const LayoutSaver::MainWindow &mw)
 {
     json["options"] = int(mw.options);
     json["multiSplitterLayout"] = mw.multiSplitterLayout;
@@ -200,7 +201,7 @@ void to_json(nlohmann::json &json, const LayoutSaver::MainWindow &mw)
     }
 }
 
-void from_json(const nlohmann::json &json, LayoutSaver::MainWindow &mw)
+static void from_json(const nlohmann::json &json, LayoutSaver::MainWindow &mw)
 {
     mw.options = static_cast<decltype(mw.options)>(jsonValue(json, "options", 0));
     mw.multiSplitterLayout = jsonValue(json, "multiSplitterLayout", LayoutSaver::MultiSplitter());
@@ -235,7 +236,7 @@ void from_json(const nlohmann::json &json, LayoutSaver::MainWindow &mw)
     }
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::FloatingWindow &window)
+static void to_json(nlohmann::json &json, const LayoutSaver::FloatingWindow &window)
 {
     json["multiSplitterLayout"] = window.multiSplitterLayout;
     json["parentIndex"] = window.parentIndex;
@@ -252,7 +253,7 @@ void to_json(nlohmann::json &json, const LayoutSaver::FloatingWindow &window)
     }
 }
 
-void from_json(const nlohmann::json &json, LayoutSaver::FloatingWindow &window)
+static void from_json(const nlohmann::json &json, LayoutSaver::FloatingWindow &window)
 {
     window.multiSplitterLayout = jsonValue(json, "multiSplitterLayout", LayoutSaver::MultiSplitter());
     window.parentIndex = jsonValue(json, "parentIndex", -1);
@@ -273,14 +274,15 @@ void from_json(const nlohmann::json &json, LayoutSaver::FloatingWindow &window)
     }
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::ScreenInfo &screenInfo)
+static void to_json(nlohmann::json &json, const LayoutSaver::ScreenInfo &screenInfo)
 {
     json["index"] = screenInfo.index;
     json["geometry"] = screenInfo.geometry;
     json["name"] = screenInfo.name;
     json["devicePixelRatio"] = screenInfo.devicePixelRatio;
 }
-void from_json(const nlohmann::json &j, LayoutSaver::ScreenInfo &screenInfo)
+
+static void from_json(const nlohmann::json &j, LayoutSaver::ScreenInfo &screenInfo)
 {
     screenInfo.index = j.value("index", 0);
     screenInfo.geometry = j.value("geometry", Rect());
@@ -288,7 +290,7 @@ void from_json(const nlohmann::json &j, LayoutSaver::ScreenInfo &screenInfo)
     screenInfo.devicePixelRatio = j.value("devicePixelRatio", 1.0);
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::Placeholder &placeHolder)
+static void to_json(nlohmann::json &json, const LayoutSaver::Placeholder &placeHolder)
 {
     json["isFloatingWindow"] = placeHolder.isFloatingWindow;
     json["itemIndex"] = placeHolder.itemIndex;
@@ -298,7 +300,7 @@ void to_json(nlohmann::json &json, const LayoutSaver::Placeholder &placeHolder)
         json["mainWindowUniqueName"] = placeHolder.mainWindowUniqueName;
 }
 
-void from_json(const nlohmann::json &json, LayoutSaver::Placeholder &placeHolder)
+static void from_json(const nlohmann::json &json, LayoutSaver::Placeholder &placeHolder)
 {
     placeHolder.isFloatingWindow = jsonValue(json, "isFloatingWindow", false);
     placeHolder.itemIndex = jsonValue(json, "itemIndex", 0);
@@ -306,7 +308,7 @@ void from_json(const nlohmann::json &json, LayoutSaver::Placeholder &placeHolder
     placeHolder.mainWindowUniqueName = jsonValue(json, "mainWindowUniqueName", QString());
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::Position &pos)
+static void to_json(nlohmann::json &json, const LayoutSaver::Position &pos)
 {
     json["lastFloatingGeometry"] = pos.lastFloatingGeometry;
     json["lastOverlayedGeometries"] = pos.lastOverlayedGeometries;
@@ -315,7 +317,7 @@ void to_json(nlohmann::json &json, const LayoutSaver::Position &pos)
     json["placeholders"] = pos.placeholders;
 }
 
-void from_json(const nlohmann::json &json, LayoutSaver::Position &pos)
+static void from_json(const nlohmann::json &json, LayoutSaver::Position &pos)
 {
     pos.lastFloatingGeometry = jsonValue(json, "lastFloatingGeometry", Rect());
     pos.lastOverlayedGeometries = jsonValue(json, "lastOverlayedGeometries", std::unordered_map<KDDockWidgets::SideBarLocation, Rect>());
@@ -324,15 +326,20 @@ void from_json(const nlohmann::json &json, LayoutSaver::Position &pos)
     pos.placeholders = jsonValue(json, "placeholders", LayoutSaver::Placeholder::List());
 }
 
-void to_json(nlohmann::json &json, const LayoutSaver::DockWidget &dw)
+static void to_json(nlohmann::json &json, const LayoutSaver::DockWidget &dw)
 {
     if (!dw.affinities.isEmpty())
         json["affinities"] = dw.affinities;
     json["uniqueName"] = dw.uniqueName;
     json["lastPosition"] = dw.lastPosition;
     json["lastCloseReason"] = dw.lastCloseReason;
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    if (!dw.userData.isEmpty())
+        json["userData"] = dw.userData;
+#endif
 }
-void from_json(const nlohmann::json &json, LayoutSaver::DockWidget &dw)
+
+static void from_json(const nlohmann::json &json, LayoutSaver::DockWidget &dw)
 {
     auto it = json.find("affinities");
     if (it != json.end())
@@ -344,16 +351,25 @@ void from_json(const nlohmann::json &json, LayoutSaver::DockWidget &dw)
 
     dw.lastPosition = jsonValue(json, "lastPosition", LayoutSaver::Position());
     dw.lastCloseReason = jsonValue(json, "lastCloseReason", CloseReason::Unspecified);
+
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    auto userDataIt = json.find("userData");
+    if (userDataIt != json.end()) {
+        QVariantMap userData;
+        from_json(*userDataIt, userData);
+        dw.userData = userData;
+    }
+#endif
 }
 
-void to_json(nlohmann::json &json, const typename LayoutSaver::DockWidget::List &list)
+static void to_json(nlohmann::json &json, const typename LayoutSaver::DockWidget::List &list)
 {
     for (const auto &mw : list) {
         json.push_back(*mw);
     }
 }
 
-void from_json(const nlohmann::json &json, typename LayoutSaver::DockWidget::List &list)
+static void from_json(const nlohmann::json &json, typename LayoutSaver::DockWidget::List &list)
 {
     list.clear();
     for (const auto &v : json) {
@@ -525,7 +541,7 @@ bool LayoutSaver::restoreLayout(const QByteArray &data)
         if (!d->matchesAffinity(mainWindow->affinities()))
             continue;
 
-        if (!(d->m_restoreOptions & InternalRestoreOption::SkipMainWindowGeometry)) {
+        if (!(d->m_restoreOptions & InternalRestoreOption::SkipMainWindowGeometry) && !mainWindow->isInDockWidget()) {
             Window::Ptr window = mainWindow->view()->window();
             if (window->windowState() == WindowState::Maximized) {
                 // Restoring geometry needs to be done in normal state.
@@ -583,7 +599,7 @@ bool LayoutSaver::restoreLayout(const QByteArray &data)
             dockWidget->d->lastPosition()->deserialize(dw->lastPosition);
         } else {
             KDDW_INFO("Couldn't find dock widget {}", dw->uniqueName);
-            auto pos = std::make_shared<KDDockWidgets::Position>();
+            auto pos = std::make_shared<KDDockWidgets::Positions>();
             pos->deserialize(dw->lastPosition);
             LayoutSaver::Private::s_unrestoredPositions[dw->uniqueName] = pos;
             LayoutSaver::Private::s_unrestoredProperties[dw->uniqueName] = dw->lastCloseReason;
@@ -639,6 +655,18 @@ void LayoutSaver::Private::deserializeWindowGeometry(const T &saved, Window::Ptr
         // The window will be maximized. We first set its geometry to normal
         // Later it's maximized and will remember this value
         geometry = saved.normalGeometry;
+
+        if (saved.screenIndex != Platform::instance()->screenNumberForPoint(geometry.topLeft())) {
+            // Workaround bug #553. Window is maximized on screen 2 but its normal
+            // geometry is on screen 1. Restoring normal geometry would move it to screen 2
+            // To avoid that, we move its normal geometry to screen 2. Could be fixed
+            // without workarounds if Qt supported QWindow::setNormalGeometry()
+            window->setScreen(saved.screenIndex);
+            if (auto screen = window->screen()) {
+                // center is as good as any
+                geometry.moveCenter(screen->geometry().center());
+            }
+        }
     }
 
     Core::FloatingWindow::ensureRectIsOnScreen(geometry);
@@ -662,7 +690,7 @@ void LayoutSaver::Private::restorePendingPositions(Core::DockWidget *dw)
     {
         auto it = s_unrestoredPositions.find(dw->uniqueName());
         if (it != s_unrestoredPositions.end()) {
-            dw->d->m_lastPosition = it->second;
+            dw->d->m_lastPositions = it->second;
             s_unrestoredPositions.erase(it);
         }
     }
@@ -830,7 +858,7 @@ Vector<QString> LayoutSaver::sideBarDockWidgetsInLayout(const QByteArray &serial
 }
 
 namespace KDDockWidgets {
-void to_json(nlohmann::json &j, const LayoutSaver::Layout &layout)
+static void to_json(nlohmann::json &j, const LayoutSaver::Layout &layout)
 {
     j["serializationVersion"] = layout.serializationVersion;
     j["mainWindows"] = layout.mainWindows;
@@ -840,7 +868,7 @@ void to_json(nlohmann::json &j, const LayoutSaver::Layout &layout)
     j["screenInfo"] = layout.screenInfo;
 }
 
-void from_json(const nlohmann::json &j, LayoutSaver::Layout &layout)
+static void from_json(const nlohmann::json &j, LayoutSaver::Layout &layout)
 {
     layout.serializationVersion = j.value("serializationVersion", 0);
     layout.mainWindows = j.value("mainWindows", LayoutSaver::MainWindow::List {});

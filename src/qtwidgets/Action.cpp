@@ -13,6 +13,7 @@
 #include "Action_p.h"
 #include "core/Action_p.h"
 #include "core/Logging_p.h"
+#include "core/Utils_p.h"
 
 using namespace KDDockWidgets::QtWidgets;
 
@@ -24,8 +25,9 @@ Action::Action(Core::DockWidget *dw, const char *debugName)
         if (m_lastCheckedState != checked) {
             m_lastCheckedState = checked;
             if (!signalsBlocked()) {
-                KDDW_TRACE("Action::toggled({}) ; dw={} ; {}", checked, ( void * )d->dockWidget, d->debugName);
-                d->toggled.emit(checked);
+                blockSignals(true); // user might call the QAction directly, so protect here as well
+                safeEmitSignal(d->toggled, checked);
+                blockSignals(false);
             }
         }
     });

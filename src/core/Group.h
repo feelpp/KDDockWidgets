@@ -36,6 +36,7 @@ class MainWindow;
 class Stack;
 class TabBar;
 class TitleBar;
+class Item;
 
 class DOCKS_EXPORT Group : public Controller, public FocusScope
 {
@@ -45,7 +46,7 @@ public:
 
     explicit Group(View *parent = nullptr, FrameOptions = FrameOption_None,
                    int userType = 0);
-    virtual ~Group() override;
+    ~Group() override;
 
     static Group *deserialize(const LayoutSaver::Group &);
     LayoutSaver::Group serialize() const;
@@ -290,10 +291,14 @@ public:
 
     LayoutingGuest *asLayoutingGuest() const;
 
+    /// Convenience that just calls close() on all its dock widgets
+    /// Returns whether all dock widgets accepted the close
+    bool close() const;
+
     /// Returns the group that's in the specified item
     static Core::Group *fromItem(const Core::Item *);
 
-    static bool s_inFloatHack;
+    static Core::Item *s_inFloatHack;
 
 protected:
     void isFocusedChangedCallback() override;

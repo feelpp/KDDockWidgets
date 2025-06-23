@@ -13,115 +13,110 @@
 // Group.qml:221: ReferenceError: parent is not defined
 #define KDDW_TESTS_NO_FATAL_WARNINGS
 
-#include "simple_test_framework.h"
 #include "core/View_p.h"
 #include "core/Platform.h"
 #include "core/Window_p.h"
+#include "utils.h"
 
+#include <QTest>
+
+using namespace KDDockWidgets;
 using namespace KDDockWidgets::Core;
 
-KDDW_QCORO_TASK tst_windowCtor()
+class TestWindow : public QObject
+{
+    Q_OBJECT
+private Q_SLOTS:
+    void tst_windowCtor();
+    void tst_setVisible();
+    void tst_handle();
+    void tst_resize();
+    void tst_activate();
+    void tst_equals();
+    void tst_geometry();
+};
+
+void TestWindow::tst_windowCtor()
 {
     auto window = Platform::instance()->tests_createWindow();
-    CHECK(window);
-    CHECK(window->isVisible());
+    QVERIFY(window);
+    QVERIFY(window->isVisible());
 
     window->destroy();
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_setVisible()
+void TestWindow::tst_setVisible()
 {
     auto window = Platform::instance()->tests_createWindow();
-    CHECK(window);
-    CHECK(window->isVisible());
+    QVERIFY(window);
+    QVERIFY(window->isVisible());
 
     window->setVisible(false);
-    CHECK(!window->isVisible());
+    QVERIFY(!window->isVisible());
 
     window->setVisible(true);
-    CHECK(window->isVisible());
+    QVERIFY(window->isVisible());
 
     window->destroy();
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_handle()
+void TestWindow::tst_handle()
 {
     auto window = Platform::instance()->tests_createWindow();
-    CHECK(window->handle());
+    QVERIFY(window->handle());
     window->destroy();
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_resize()
+void TestWindow::tst_resize()
 {
     auto window = Platform::instance()->tests_createWindow();
     const KDDockWidgets::Size newSize(501, 502);
     window->resize(newSize.width(), newSize.height());
 
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(100);
+    QTest::qWait(100);
 
-    CHECK_EQ(window->size(), newSize);
+    QCOMPARE(window->size(), newSize);
 
     window->destroy();
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_activate()
+void TestWindow::tst_activate()
 {
     auto window = Platform::instance()->tests_createWindow();
-    // CHECK(window->isActive());
+    // QVERIFY(window->isActive());
 
     // TODO
 
     window->destroy();
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_equals()
+void TestWindow::tst_equals()
 {
     auto window1 = Platform::instance()->tests_createWindow();
     auto window2 = Platform::instance()->tests_createWindow();
 
-    CHECK(window1->equals(window1));
-    CHECK(!window1->equals(window2));
-    CHECK(!window1->equals({}));
+    QVERIFY(window1->equals(window1));
+    QVERIFY(!window1->equals(window2));
+    QVERIFY(!window1->equals({}));
 
     window1->destroy();
     window2->destroy();
-
-    KDDW_TEST_RETURN(true);
 }
 
-KDDW_QCORO_TASK tst_geometry()
+void TestWindow::tst_geometry()
 {
     auto window = Platform::instance()->tests_createWindow();
 
     const auto geo = KDDockWidgets::Rect(100, 100, 1000, 1000);
     window->setGeometry(geo);
 
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(100);
-    CHECK_EQ(window->geometry(), geo);
+    QTest::qWait(100);
+    QCOMPARE(window->geometry(), geo);
 
     window->destroy();
-
-    KDDW_TEST_RETURN(true);
 }
 
-static const auto s_tests = std::vector<KDDWTest> {
-    TEST(tst_windowCtor),
-    TEST(tst_setVisible),
-    TEST(tst_handle),
-    TEST(tst_resize),
-    TEST(tst_activate),
-    TEST(tst_equals),
-    TEST(tst_geometry)
-};
+#define KDDW_TEST_NAME TestWindow
+#include "test_main_qt.h"
 
-#include "tests_main.h"
+#include "tst_window.moc"

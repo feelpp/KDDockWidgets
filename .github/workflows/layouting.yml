@@ -7,14 +7,12 @@ name: Layouting library
 on:
   push:
     branches:
-      - 2.1
-      - 2.0
       - main
+      - 2.2
   pull_request:
     branches:
-      - 2.1
-      - 2.0
       - main
+      - 2.2
 
 jobs:
   build:
@@ -23,15 +21,20 @@ jobs:
       fail-fast: true
       matrix:
         os:
-          - ubuntu-22.04
+          - ubuntu-24.04
           - windows-2022
-          - macos-12
+          - macos-15
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install ninja
+      - name: Install ninja (Windows / Linux)
+        if: ${{ runner.os != 'macOS' }}
         uses: turtlesec-no/get-ninja@main
+
+      - name: Install ninja (macOS)
+        if: ${{ runner.os == 'macOS' }}
+        run: brew install ninja
 
       - name: Make sure MSVC is found when Ninja generator is in use
         if: ${{ runner.os == 'Windows' }}

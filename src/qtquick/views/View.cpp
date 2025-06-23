@@ -9,6 +9,13 @@
   Contact KDAB at <info@kdab.com> for commercial licensing options.
 */
 
+#include <qglobal.h>
+
+#if QT_VERSION == QT_VERSION_CHECK(6, 10, 0)
+// Compile failure in Qt QtQuick private headers
+#undef QT_NO_CAST_FROM_BYTEARRAY
+#endif
+
 #include "View.h"
 #include "core/Utils_p.h"
 #include "core/View_p.h"
@@ -286,7 +293,7 @@ bool View::close(QQuickItem *item)
 {
     if (auto viewqtquick = qobject_cast<View *>(item)) {
         QCloseEvent ev;
-        viewqtquick->Core::View::d->closeRequested.emit(&ev);
+        viewqtquick->Core::View::d->requestClose(&ev);
 
         if (ev.isAccepted()) {
             viewqtquick->setVisible(false);
@@ -487,7 +494,7 @@ void View::setMaximumSize(QSize sz)
     if (maxSizeHint() != sz) {
         setProperty("kddockwidgets_max_size", sz);
         updateGeometry();
-        Core::View::d->layoutInvalidated.emit();
+        Core::View::d->emitLayoutInvalidated();
     }
 }
 
@@ -805,7 +812,7 @@ void View::setMinimumSize(QSize sz)
     if (minSize() != sz) {
         setProperty("kddockwidgets_min_size", sz);
         updateGeometry();
-        Core::View::d->layoutInvalidated.emit();
+        Core::View::d->emitLayoutInvalidated();
     }
 }
 
@@ -860,7 +867,7 @@ bool View::isFixedHeight() const
 }
 
 namespace KDDockWidgets {
-inline QString cleanQRCFilename(const QString &filename)
+static QString cleanQRCFilename(const QString &filename)
 {
     // QFile doesn't understand qrc:/ only :/
 

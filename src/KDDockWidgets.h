@@ -23,7 +23,7 @@
 
 #include "QtCompat_p.h"
 
-#ifdef KDDW_FRONTEND_QT
+#ifdef KDDW_QTGUI_TYPES
 #include "Qt5Qt6Compat_p.h"
 
 #ifdef Q_OS_WIN
@@ -35,6 +35,15 @@
 #endif
 
 #endif
+
+#ifdef KDDW_FRONTEND_QTQUICK
+#include <QQmlEngine>
+#else
+// So QWidget builds don't break
+#define QML_ELEMENT
+#define QML_UNCREATABLE(x) static_assert(true, "");
+#endif
+
 
 namespace KDDockWidgets::QtQuick {
 }
@@ -48,6 +57,7 @@ namespace KDDockWidgets::Flutter {
 namespace KDDockWidgets {
 QT_DOCKS_EXPORT
 Q_NAMESPACE
+QML_ELEMENT
 
 namespace QtWidgets {
 class DockWidget;
@@ -69,17 +79,19 @@ Q_ENUM_NS(Location)
 
 enum MainWindowOption {
     MainWindowOption_None = 0, ///> No option set
-    MainWindowOption_HasCentralFrame =
+    MainWindowOption_HasCentralGroup =
         1, ///> Makes the MainWindow always have a central group, for tabbing documents
+    MainWindowOption_HasCentralFrame = MainWindowOption_HasCentralGroup, /// deprecated synonym
     MainWindowOption_MDI = 2, ///> The layout will be MDI. DockWidgets can have arbitrary positions,
                               /// not restricted by any layout
     MainWindowOption_HasCentralWidget =
-        4 | MainWindowOption_HasCentralFrame, ///> Similar to MainWindowOption_HasCentralFrame but
+        4 | MainWindowOption_HasCentralGroup, ///> Similar to MainWindowOption_HasCentralGroup but
     ///> you'll have a central widget which can't be detached (Similar to regular QMainWindow). @sa
     /// MainWindowBase::setPersistentCentralWidget()
     MainWindowOption_QDockWidgets = 8, ///> Allows the user to use QDockWidget instead of KDDW DockWidget, while using the KDDW MainWindow
                                        ///> Useful as a porting aid, where you want to migrate your main windows 1 by 1
-    MainWindowOption_ManualInit = 16 ///> For compatibility with setupUi() from UIC. See manualInit() for more details
+    MainWindowOption_ManualInit = 16, ///> For compatibility with setupUi() from UIC. See manualInit() for more details
+    MainWindowOption_CentralWidgetGetsAllExtraSpace = 32, ///> defines that all resize events to the main window lead to the central widget getting all extra space
 };
 Q_DECLARE_FLAGS(MainWindowOptions, MainWindowOption)
 Q_ENUM_NS(MainWindowOptions)
@@ -167,6 +179,9 @@ Q_ENUM_NS(NeighbourSqueezeStrategy)
  *
  * You can pass this to MainWindowBase::addDockWidget() to give an hint of your preferred size
  * and visibility.
+ *
+ * Note that if your layout currently has 0 dock widgets, the dockwidget you're adding will always
+ * occupy 100% of the layout, preferredSize won't be honoured.
  *
  * See below the documentation for InitialOption::visibility and InitialOption::preferredSize.
  *
@@ -421,7 +436,7 @@ inline T *findAncestor(QWidget *widget)
 template<typename T>
 T bound(T minVal, T value, T maxVal)
 {
-    return std::max(minVal, std::min(value, maxVal));
+    return ( std::max )(minVal, ( std::min )(value, maxVal));
 }
 
 inline bool fuzzyCompare(double a, double b, double epsilon = 0.0001)

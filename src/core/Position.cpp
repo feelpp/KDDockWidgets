@@ -18,6 +18,8 @@
 #include "Position_p.h"
 #include "LayoutSaver_p.h"
 #include "Logging_p.h"
+#include "Group.h"
+#include "DockWidget_p.h"
 #include "ScopedValueRollback_p.h"
 #include "core/layouting/Item_p.h"
 #include "core/layouting/LayoutingHost_p.h"
@@ -31,12 +33,12 @@
 
 using namespace KDDockWidgets;
 
-Position::~Position()
+Positions::~Positions()
 {
     m_placeholders.clear();
 }
 
-void Position::addPlaceholderItem(Core::Item *placeholder)
+void Positions::addPlaceholderItem(Core::Item *placeholder)
 {
     assert(placeholder);
 
@@ -45,13 +47,8 @@ void Position::addPlaceholderItem(Core::Item *placeholder)
         return;
 
     if (DockRegistry::self()->itemIsInMainWindow(placeholder)) {
-        // 2. If we have a MainWindow placeholder we don't need nothing else
-        removePlaceholders();
-    } else {
-        // 3. It's a placeholder to a FloatingWindow. Let's still keep any MainWindow placeholders
-        // we have as FloatingWindow are temporary so we might need the MainWindow placeholder
-        // later.
-        removeNonMainWindowPlaceholders();
+        // 2. We only support 1 main window placeholder for now
+        removeMainWindowPlaceholders();
     }
 
     // Make sure our list only contains valid placeholders. We save the result so we can disconnect
@@ -67,35 +64,60 @@ void Position::addPlaceholderItem(Core::Item *placeholder)
     // meaningful names in separated variables
 }
 
-Core::Item *Position::layoutItem() const
+bool Positions::itemIsBeingDestroyed(Core::Item *item) const
 {
-    // Return the layout item that is in a MainWindow, that's where we restore the dock widget to.
-    // In the future we might want to restore it to FloatingWindows.
+    if (item->m_inDtor)
+        return true;
 
-    for (const auto &itemref : m_placeholders) {
-        if (itemref->isInMainWindow())
-            return itemref->item;
+    Core::Layout *layout = DockRegistry::self()->layoutForItem(item);
+    if (layout) {
+        /// FloatingWindow get destroyed with delete later
+        /// its layout items aren't suitable to dock back in as they will be destroyed
+        if (Core::FloatingWindow *fw = layout->floatingWindow()) {
+            if (fw->beingDeleted())
+                return true;
+        }
+    }
+
+    return false;
+}
+
+Core::Item *Positions::lastItem(Core::Item *current) const
+{
+    for (auto it = m_placeholders.rbegin(), e = m_placeholders.rend(); it != e; ++it) {
+        auto item = (*it)->item;
+
+        if (item == current || item == Core::Group::s_inFloatHack || itemIsBeingDestroyed(item)) {
+            continue;
+        }
+
+        return item;
     }
 
     return nullptr;
 }
 
-bool Position::containsPlaceholder(Core::Item *item) const
-{
-    for (const auto &itemRef : m_placeholders)
-        if (itemRef->item == item)
-            return true;
 
-    return false;
+Core::Item *Positions::lastItem(const Core::DockWidget *current) const
+{
+    Core::Item *currentItem = current ? current->d->item() : nullptr;
+    return lastItem(currentItem);
 }
 
-void Position::removePlaceholders()
+bool Positions::containsPlaceholder(Core::Item *item) const
+{
+    return std::any_of(m_placeholders.cbegin(), m_placeholders.cend(), [item](const auto &itemRef) {
+        return itemRef->item == item;
+    });
+}
+
+void Positions::removePlaceholders()
 {
     ScopedValueRollback clearGuard(m_clearing, true);
     m_placeholders.clear();
 }
 
-void Position::removePlaceholders(const Core::LayoutingHost *host)
+void Positions::removePlaceholders(const Core::LayoutingHost *host)
 {
     m_placeholders.erase(std::remove_if(m_placeholders.begin(), m_placeholders.end(),
                                         [host](const std::unique_ptr<ItemRef> &itemref) {
@@ -106,7 +128,7 @@ void Position::removePlaceholders(const Core::LayoutingHost *host)
                          m_placeholders.end());
 }
 
-void Position::removeNonMainWindowPlaceholders()
+void Positions::removeNonMainWindowPlaceholders()
 {
     auto it = m_placeholders.begin();
     while (it != m_placeholders.end()) {
@@ -118,7 +140,19 @@ void Position::removeNonMainWindowPlaceholders()
     }
 }
 
-void Position::removePlaceholder(Core::Item *placeholder)
+void Positions::removeMainWindowPlaceholders()
+{
+    auto it = m_placeholders.begin();
+    while (it != m_placeholders.end()) {
+        ItemRef *itemref = it->get();
+        if (itemref->isInMainWindow())
+            it = m_placeholders.erase(it);
+        else
+            ++it;
+    }
+}
+
+void Positions::removePlaceholder(Core::Item *placeholder)
 {
     if (m_clearing) // reentrancy guard
         return;
@@ -130,7 +164,12 @@ void Position::removePlaceholder(Core::Item *placeholder)
                          m_placeholders.end());
 }
 
-void Position::deserialize(const LayoutSaver::Position &lp)
+int Positions::placeholderCount() const
+{
+    return int(m_placeholders.size());
+}
+
+void Positions::deserialize(const LayoutSaver::Position &lp)
 {
     m_lastFloatingGeometry = lp.lastFloatingGeometry;
     m_lastOverlayedGeometries = lp.lastOverlayedGeometries;
@@ -144,6 +183,11 @@ void Position::deserialize(const LayoutSaver::Position &lp)
                 continue; // Skip
             } else {
                 assert(LayoutSaver::Layout::s_currentLayoutBeingRestored);
+                if (!LayoutSaver::Layout::s_currentLayoutBeingRestored) {
+                    /// Doesn't happen, but let's guard it
+                    KDDW_WARN("Positions::deserialize: Current layout is null, report a bug!");
+                    continue;
+                }
                 auto serializedFw =
                     LayoutSaver::Layout::s_currentLayoutBeingRestored->floatingWindowForIndex(
                         index);
@@ -178,7 +222,7 @@ void Position::deserialize(const LayoutSaver::Position &lp)
     m_wasFloating = lp.wasFloating;
 }
 
-LayoutSaver::Position Position::serialize() const
+LayoutSaver::Position Positions::serialize() const
 {
     LayoutSaver::Position l;
 
@@ -217,14 +261,14 @@ LayoutSaver::Position Position::serialize() const
     return l;
 }
 
-ItemRef::ItemRef(KDBindings::ConnectionHandle conn, Core::Item *it)
+Positions::ItemRef::ItemRef(KDBindings::ConnectionHandle conn, Core::Item *it)
     : item(it)
     , connection(std::move(conn))
 {
     item->ref();
 }
 
-ItemRef::~ItemRef()
+Positions::ItemRef::~ItemRef()
 {
     if (item && !item->m_inDtor) {
         connection.disconnect();
@@ -232,7 +276,7 @@ ItemRef::~ItemRef()
     }
 }
 
-bool ItemRef::isInMainWindow() const
+bool Positions::ItemRef::isInMainWindow() const
 {
     return item && DockRegistry::self()->itemIsInMainWindow(item);
 }

@@ -27,6 +27,7 @@
 #include <QtWidgets/QTreeView>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QMainWindow>
+#include <qmenu.h>
 
 enum MyRole {
     WidgetRole = Qt::UserRole + 1,
@@ -42,18 +43,25 @@ public:
         : QWidget(parent)
     {
         auto pickButton = new QPushButton(QStringLiteral("Pick widget"));
-        pickButton->setObjectName("pick button");
+        pickButton->setObjectName(QStringLiteral("pick button"));
         auto vlay = new QVBoxLayout(this);
         auto hlay = new QHBoxLayout();
 
         m_tree.setMinimumWidth(700);
         m_tree.setModel(&m_model);
+        m_tree.setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(&m_tree, &QTreeView::customContextMenuRequested, this, &DebugWidgetViewer::onCustomContextMenuRequested);
+
         hlay->addWidget(&m_tree);
         hlay->addWidget(&m_preview);
         vlay->addLayout(hlay);
         vlay->addWidget(pickButton);
         connect(pickButton, &QPushButton::clicked, this,
                 &DebugWidgetViewer::pickWidget);
+
+        connect(&m_model, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &) {
+            renderTree();
+        });
 
         connect(m_tree.selectionModel(), &QItemSelectionModel::selectionChanged,
                 this, &DebugWidgetViewer::onSelectionChanged);
@@ -63,66 +71,79 @@ public:
 
     void pickWidget()
     {
-        setFilteringEnabled(true);
+        setPickingEnabled(true);
     }
 
-    void loadWidget(QWidget *widget)
+    void loadPickedWidget(QWidget *widget)
     {
         m_model.clear();
         if (!widget)
             return;
 
-        QWidgetList path;
-        auto p = widget;
-        while (p) {
-            path.append(p);
-            p = p->parentWidget();
-        }
-
-        QStandardItem *previous = nullptr;
-        for (auto it = path.crbegin(), e = path.crend(); it != e; ++it) {
-            QWidget *w = *it;
-            QString name = QString::fromLatin1(w->metaObject()->className());
-            if (!w->objectName().isEmpty()) {
-                name += "[" + w->objectName() + "]";
-            }
-
-            auto item = new QStandardItem(name);
-            item->setData(QVariant::fromValue(w), WidgetRole);
-            item->setData(pixmapForWidget(w), PixmapRole);
-
-            auto parent = previous ? previous : m_model.invisibleRootItem();
-            item->setCheckable(true);
-            item->setCheckState(Qt::Checked);
-            parent->insertRow(0, item);
-            previous = item;
-        }
+        loadWidgetRecursively(widget->window(), m_model.invisibleRootItem());
 
         renderTree();
     }
 
+    void loadWidgetRecursively(QWidget *w, QStandardItem *parentItem)
+    {
+        if (!w->isVisible())
+            return;
+
+        if (w->size().isEmpty()) {
+            qDebug() << "Ignoring widget with empty size" << w << w->size();
+            return;
+        }
+
+        QString name = QString::fromLatin1(w->metaObject()->className());
+        if (!w->objectName().isEmpty()) {
+            name += QStringLiteral("[%1]").arg(w->objectName());
+        }
+
+        QWidget *parentWidget = w->parentWidget();
+        if (parentWidget && !w->isWindow() && !w->geometry().intersects(parentWidget->rect())) {
+            qDebug() << "Widget out of bounds! w=" << w << "; geometry=" << w->geometry() << "; parentSize=" << parentWidget->size();
+        }
+
+        auto item = new QStandardItem(name);
+        item->setData(QVariant::fromValue(w), WidgetRole);
+        item->setData(pixmapForWidget(w), PixmapRole);
+        item->setCheckable(true);
+        item->setCheckState(Qt::Checked);
+
+        const int indexToInsert = parentItem->rowCount();
+        parentItem->insertRow(indexToInsert, item);
+
+        for (auto child : w->children()) {
+            if (auto childWidget = qobject_cast<QWidget *>(child)) {
+                loadWidgetRecursively(childWidget, item);
+            }
+        }
+    }
+
+    /// Event filter for picking
     bool eventFilter(QObject *watched, QEvent *event) override
     {
         if (event->type() != QEvent::MouseButtonPress)
             return false;
 
         if (auto w = qobject_cast<QWidget *>(watched)) {
-            setFilteringEnabled(false);
-            loadWidget(w);
+            setPickingEnabled(false);
+            loadPickedWidget(w);
             return true;
         }
 
         return false;
     }
 
-    void setFilteringEnabled(bool enabled)
+    void setPickingEnabled(bool enabled)
     {
         if (enabled) {
-            qApp->setOverrideCursor(Qt::CrossCursor);
-            qApp->installEventFilter(this);
+            qGuiApp->setOverrideCursor(Qt::CrossCursor);
+            qGuiApp->installEventFilter(this);
         } else {
-            qApp->removeEventFilter(this);
-            qApp->restoreOverrideCursor();
+            qGuiApp->removeEventFilter(this);
+            qGuiApp->restoreOverrideCursor();
         }
     }
 
@@ -142,9 +163,12 @@ public:
 
     void renderTree(QStandardItem *node, const QWidget *rootWidget)
     {
-
         QWidget *widget = node->data(WidgetRole).value<QWidget *>();
-        if (widget && node->checkState() == Qt::Checked) {
+        if (widget && node->checkState() != Qt::Checked) {
+            return;
+        }
+
+        if (widget) {
             const QPoint offset = widget->mapTo(rootWidget, QPoint(0, 0));
             widget->render(&m_previewPx, offset, {}, DrawWindowBackground);
         }
@@ -184,13 +208,32 @@ public:
                  << "\n  autoFillBackground=" << widget->autoFillBackground()
                  << "\n  Window=" << widget->palette().color(QPalette::Window)
                  << "\n  Base=" << widget->palette().color(QPalette::Base)
-                 << "\n  Button=" << widget->palette().color(QPalette::Button);
+                 << "\n  Button=" << widget->palette().color(QPalette::Button)
+                 << "\n  HWND=" << widget->windowHandle();
 
         if (auto mw = qobject_cast<QMainWindow *>(widget)) {
             qDebug() << "  centralWidget=" << mw->centralWidget();
         }
 
         qDebug() << "END PRINT-------------------";
+    }
+
+    void onCustomContextMenuRequested(QPoint pos)
+    {
+        const QModelIndex index = m_tree.indexAt(pos);
+        if (!index.isValid())
+            return;
+
+        QMenu menu;
+        QAction *a = menu.addAction(QStringLiteral("render to png"));
+        connect(a, &QAction::triggered, this, [&index] {
+            auto widget = index.data(WidgetRole).value<QWidget *>();
+            Q_ASSERT(widget);
+            QPixmap px(widget->size());
+            widget->render(&px, {}, {}, DrawWindowBackground);
+            px.save(QStringLiteral("widget.png"));
+        });
+        menu.exec(m_tree.mapToGlobal(pos));
     }
 
 private:

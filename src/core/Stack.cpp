@@ -10,8 +10,10 @@
 */
 
 #include "Stack.h"
+#include "KDDockWidgets.h"
 #include "Stack_p.h"
 #include "Config.h"
+#include "TitleBar.h"
 #include "ViewFactory.h"
 #include "Logging_p.h"
 #include "Utils_p.h"
@@ -69,11 +71,7 @@ bool Stack::insertDockWidget(DockWidget *dock, int index)
 {
     assert(dock);
 
-    if (index < 0)
-        index = 0;
-    if (index > numDockWidgets())
-        index = numDockWidgets();
-
+    index = KDDockWidgets::bound(0, index, numDockWidgets());
     if (contains(dock)) {
         KDDW_ERROR("Refusing to add already existing widget");
         return false;
@@ -176,10 +174,16 @@ bool Stack::onMouseDoubleClick(Point localPos)
         return false;
 
     if (FloatingWindow *fw = group->floatingWindow()) {
-        if (!fw->hasSingleGroup()) {
+        if (fw->hasSingleGroup()) {
+            // Window is floating, let's restore it to its main window
+            // Minor hack: Even though our titlebar is hidden, all the logic for float/unfloat
+            // is in core/TitleBar.cpp, so just call that.
+            fw->titleBar()->onFloatClicked();
+        } else {
             makeWindow();
-            return true;
         }
+
+        return true;
     } else if (group->isInMainWindow()) {
         makeWindow();
         return true;
@@ -228,4 +232,16 @@ void Stack::setHideDisabledButtons(TitleBarButtonTypes types)
 bool Stack::buttonHidesIfDisabled(TitleBarButtonType type) const
 {
     return d->m_buttonsToHideIfDisabled & type;
+}
+
+bool Stack::dragCanStart(Point pressPos, Point pos) const
+{
+    if (!Draggable::dragCanStart(pressPos, pos))
+        return false;
+
+    if (d->m_group && d->m_group->isCentralGroup()) {
+        return false;
+    }
+
+    return true;
 }

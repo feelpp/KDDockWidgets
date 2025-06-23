@@ -24,7 +24,6 @@ namespace KDDockWidgets {
 
 namespace Core {
 class View;
-class Group;
 class ItemContainer;
 class ItemBoxContainer;
 class Item;
@@ -58,7 +57,8 @@ enum class ChildrenResizeStrategy {
                 ///< percentage
     Side1SeparatorMove, ///< When resizing a container, it takes/adds space from Side1 children
                         ///< first
-    Side2SeparatorMove ///< When resizing a container, it takes/adds space from Side2 children first
+    Side2SeparatorMove, ///< When resizing a container, it takes/adds space from Side2 children first
+    GiveDropAreaWithCentralFrameAllExtra ///< When resizing a container, it gives all extra space to a drop area with central frame fix, otherwise same as Percentage
 };
 
 enum LayoutBorderLocation {

@@ -39,6 +39,7 @@ public:
     QVector<std::shared_ptr<Core::Window>> windows() const override;
     virtual std::shared_ptr<Core::Window> windowFromQWindow(QWindow *) const = 0;
     int screenNumberForWindow(std::shared_ptr<Core::Window>) const override;
+    int screenNumberForPoint(Point) const override;
 
     void sendEvent(Core::View *, QEvent *) const override;
 
@@ -103,6 +104,8 @@ public:
     bool tests_waitForResize(Core::Controller *, int timeout = 2000) const override;
     bool tests_waitForDeleted(Core::View *, int timeout = 2000) const override;
     bool tests_waitForDeleted(Core::Controller *, int timeout = 2000) const override;
+
+    static int s_logicalDpiFactorOverride;
 
 #endif
 

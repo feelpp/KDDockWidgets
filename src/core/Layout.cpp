@@ -163,10 +163,15 @@ void Layout::restorePlaceholder(Core::DockWidget *dw, Core::Item *item, int tabI
         KDDW_ERROR("Layout::restorePlaceholder: Trying to use a group that's being deleted");
     }
 
-    if (tabIndex != -1 && group->dockWidgetCount() >= tabIndex) {
-        group->insertWidget(dw, tabIndex);
+    if (auto tabIndexFunc = Config::self().dockWidgetTabIndexOverrideFunc()) {
+        // The user wishes to control the tabIndex himself
+        group->insertWidget(dw, tabIndexFunc(dw, group, tabIndex));
     } else {
-        group->addTab(dw);
+        if (tabIndex != -1 && group->dockWidgetCount() >= tabIndex) {
+            group->insertWidget(dw, tabIndex);
+        } else {
+            group->addTab(dw);
+        }
     }
 
     group->Controller::setVisible(true);
@@ -185,8 +190,15 @@ void Layout::unrefOldPlaceholders(const Core::Group::List &groupsBeingAdded) con
 void Layout::setLayoutSize(Size size)
 {
     if (size != layoutSize()) {
-        d->m_rootItem->setSize_recursive(size);
-        if (!d->m_inResizeEvent && !LayoutSaver::restoreInProgress())
+        const bool restoreInProgress = LayoutSaver::restoreInProgress();
+        ChildrenResizeStrategy strategy = ChildrenResizeStrategy::Percentage;
+        const auto *main = mainWindow();
+        if (!restoreInProgress && main && main->options() & MainWindowOption_CentralWidgetGetsAllExtraSpace)
+            strategy = ChildrenResizeStrategy::GiveDropAreaWithCentralFrameAllExtra;
+
+        d->m_rootItem->setSize_recursive(size, strategy);
+
+        if (!d->m_inResizeEvent && !restoreInProgress)
             view()->resize(size);
     }
 }

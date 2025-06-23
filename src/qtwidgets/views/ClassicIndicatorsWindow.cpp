@@ -24,10 +24,14 @@
 
 #ifdef QT_X11EXTRAS_LIB
 #include <QtX11Extras/QX11Info>
+#elif QT_VERSION >= QT_VERSION_CHECK(6, 0, 0) && defined(Q_OS_LINUX)
+#include <QtGui/private/qtx11extras_p.h>
 #endif
 
-#define INDICATOR_WIDTH 40
-#define OUTTER_INDICATOR_MARGIN 10
+enum {
+    INDICATOR_WIDTH = 40,
+    OUTTER_INDICATOR_MARGIN = 10
+};
 
 using namespace KDDockWidgets;
 using namespace KDDockWidgets::Core;
@@ -35,13 +39,13 @@ using namespace KDDockWidgets::QtWidgets;
 
 namespace KDDockWidgets {
 
-inline bool windowManagerHasTranslucency()
+static bool windowManagerHasTranslucency()
 {
     if (qEnvironmentVariableIsSet("KDDW_NO_TRANSLUCENCY")
         || (Config::self().internalFlags() & Config::InternalFlag_DisableTranslucency))
         return false;
 
-#ifdef QT_X11EXTRAS_LIB
+#if defined(QT_X11EXTRAS_LIB) || (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0) && defined(Q_OS_LINUX))
     if (isXCB())
         return QX11Info::isCompositingManagerRunning();
 #endif

@@ -2,26 +2,30 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only
 
-name: Valgrind qtwidgets_leak_test
+name: Valgrind leakcheck
 
 on:
   push:
     branches:
-      - 2.1
       - main
+      - 2.2
   pull_request:
     branches:
-      - 2.1
       - main
+      - 2.2
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
     steps:
+      - name: Export IS_SELFHOSTED
+        run: echo "IS_SELFHOSTED=$IS_SELFHOSTED" >> $GITHUB_ENV
+
       - name: Install Qt 6.6.0
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
+        if: env.IS_SELFHOSTED != 1
         with:
           version: 6.6.0
           cache: true

@@ -13,6 +13,7 @@
 #define KD_FLOATING_WINDOWQUICK_P_H
 
 #include "View.h"
+#include <functional>
 
 QT_BEGIN_NAMESPACE
 class QQuickView;
@@ -30,11 +31,17 @@ class MainWindow;
 class TitleBar;
 class DropArea;
 
+
+using QuickWindowCreationCallback = std::function<void(QQuickView *window, QtQuick::MainWindow *parent)>;
+
 class DOCKS_EXPORT FloatingWindow : public QtQuick::View
 {
     Q_OBJECT
-    Q_PROPERTY(QObject *titleBar READ titleBar CONSTANT)
-    Q_PROPERTY(QObject *dropArea READ dropArea CONSTANT)
+    QML_NAMED_ELEMENT(FloatingWindowView)
+    QML_UNCREATABLE("Created by the framework only.")
+
+    Q_PROPERTY(KDDockWidgets::QtQuick::TitleBar *titleBar READ titleBar CONSTANT)
+    Q_PROPERTY(KDDockWidgets::QtQuick::DropArea *dropArea READ dropArea CONSTANT)
 public:
     explicit FloatingWindow(Core::FloatingWindow *controller,
                             QtQuick::MainWindow *parent = nullptr,
@@ -44,10 +51,13 @@ public:
     QSize minSize() const override;
 
     // QML interface
-    QObject *titleBar() const;
-    QObject *dropArea() const;
+    KDDockWidgets::QtQuick::TitleBar *titleBar() const;
+    KDDockWidgets::QtQuick::DropArea *dropArea() const;
 
     Core::Item *rootItem() const;
+
+    /// Set a callback if you want to be notified of a QQuickView being created
+    static void setQuickWindowCreationCallback(const QuickWindowCreationCallback &);
 
 protected:
     void setGeometry(QRect) override;
@@ -57,10 +67,12 @@ private:
     int contentsMargins() const;
     int titleBarHeight() const;
     QWindow *candidateParentWindow() const;
-    void init() override final;
+    void init() final;
     QQuickView *const m_quickWindow;
     QQuickItem *m_visualItem = nullptr;
     Core::FloatingWindow *const m_controller;
+    static QuickWindowCreationCallback s_quickWindowCreationCallback;
+
     Q_DISABLE_COPY(FloatingWindow)
 };
 

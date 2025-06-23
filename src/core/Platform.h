@@ -83,6 +83,10 @@ public:
     /// @brief Returns the size of the screen where this view is in
     virtual Size screenSizeFor(View *) const = 0;
 
+    /// @brief Returns which screen the point is in
+    /// -1 if not found
+    virtual int screenNumberForPoint(Point) const = 0;
+
     /// @brief Create an empty view
     /// For Qt this would just returns a empty QWidget or QQuickItem
     /// other frontends can return something as basic.
@@ -194,6 +198,11 @@ public:
     /// Only supported on Qt, for windows
     virtual bool supportsAeroSnap() const;
 
+    /// Called when the Config::viewFactory has changed
+    virtual void onViewFactoryChanged()
+    {
+    }
+
     /// @brief list the list of frontend types supported by this build
     static std::vector<KDDockWidgets::FrontendType> frontendTypes();
 
@@ -209,33 +218,33 @@ public:
     /// @brief halts the test during the specified number of milliseconds
     /// The event loop keeps running. Use this for debugging purposes so you can interact with your
     /// test and see what's going on
-    virtual KDDW_QCORO_TASK tests_wait(int ms) const = 0;
+    virtual bool tests_wait(int ms) const = 0;
 
     /// @brief Waits for the specified view to receive a resize event
     /// Returns true if the view was resized until timeout was reached
-    virtual KDDW_QCORO_TASK tests_waitForResize(View *, int timeout = DEFAULT_TIMEOUT) const = 0;
-    virtual KDDW_QCORO_TASK tests_waitForResize(Controller *, int timeout = DEFAULT_TIMEOUT) const = 0;
-    virtual KDDW_QCORO_TASK tests_waitForDeleted(View *, int timeout = DEFAULT_TIMEOUT) const = 0;
-    virtual KDDW_QCORO_TASK tests_waitForDeleted(Controller *, int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForResize(View *, int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForResize(Controller *, int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForDeleted(View *, int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForDeleted(Controller *, int timeout = DEFAULT_TIMEOUT) const = 0;
 
     /// @brief Waits for the specified window to be active (have the keyboard focus)
     /// Window::isActive() should return true
     /// @sa Window::isActive()
-    virtual KDDW_QCORO_TASK tests_waitForWindowActive(std::shared_ptr<Core::Window>, int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForWindowActive(std::shared_ptr<Core::Window>, int timeout = DEFAULT_TIMEOUT) const = 0;
 
     /// @brief Waits for the specified view to receive the specified event
     /// Returns true if the view received said event until timeout was reached
-    virtual KDDW_QCORO_TASK tests_waitForEvent(Core::Object *w, Event::Type type, int timeout = DEFAULT_TIMEOUT) const = 0;
-    virtual KDDW_QCORO_TASK tests_waitForEvent(View *, Event::Type type, int timeout = DEFAULT_TIMEOUT) const = 0;
-    virtual KDDW_QCORO_TASK tests_waitForEvent(std::shared_ptr<Core::Window>, Event::Type type,
-                                               int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForEvent(Core::Object *w, Event::Type type, int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForEvent(View *, Event::Type type, int timeout = DEFAULT_TIMEOUT) const = 0;
+    virtual bool tests_waitForEvent(std::shared_ptr<Core::Window>, Event::Type type,
+                                    int timeout = DEFAULT_TIMEOUT) const = 0;
 
     virtual void tests_doubleClickOn(Point globalPos, View *receiver) = 0;
     virtual void tests_doubleClickOn(Point globalPos, std::shared_ptr<Core::Window> receiver) = 0;
     virtual void tests_pressOn(Point globalPos, View *receiver) = 0;
     virtual void tests_pressOn(Point globalPos, std::shared_ptr<Core::Window> receiver) = 0;
-    virtual KDDW_QCORO_TASK tests_releaseOn(Point globalPos, View *receiver) = 0;
-    virtual KDDW_QCORO_TASK tests_mouseMove(Point globalPos, View *receiver) = 0;
+    virtual bool tests_releaseOn(Point globalPos, View *receiver) = 0;
+    virtual bool tests_mouseMove(Point globalPos, View *receiver) = 0;
 
     /// @brief Creates a Window. For the sole purpose of unit-testing Window.
     /// The created window should be visible.
@@ -282,7 +291,7 @@ public:
     /// internally by some tools that need a main window
     virtual Core::MainWindow *
     createMainWindow(const QString &uniqueName, CreateViewOptions,
-                     MainWindowOptions options = MainWindowOption_HasCentralFrame,
+                     MainWindowOptions options = MainWindowOption_HasCentralGroup,
                      View *parent = nullptr, Qt::WindowFlags = {}) const = 0;
 
     virtual void pauseForDebugger();

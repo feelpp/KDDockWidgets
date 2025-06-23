@@ -49,14 +49,12 @@
 
 #include <utility>
 
-#define MARGIN_THRESHOLD 100
-
 static int s_dbg_numFrames = 0;
-
-bool KDDockWidgets::Core::Group::s_inFloatHack = false;
 
 using namespace KDDockWidgets;
 using namespace KDDockWidgets::Core;
+
+Core::Item *Core::Group::s_inFloatHack = nullptr;
 
 namespace KDDockWidgets {
 
@@ -164,10 +162,10 @@ void Group::setLayout(Layout *dt)
             m_layout->d_ptr()->visibleWidgetCountChanged.connect(&Group::updateTitleBarVisibility, this);
         updateTitleBarVisibility();
         if (wasInMainWindow != isInMainWindow())
-            d->isInMainWindowChanged.emit();
+            safeEmitSignal(d->isInMainWindowChanged);
     }
 
-    d->isMDIChanged.emit();
+    safeEmitSignal(d->isMDIChanged);
 }
 
 void Group::renameTab(int index, const QString &title)
@@ -415,7 +413,7 @@ void Group::onDockWidgetCountChanged()
         // We don't really keep track of the state, so emit even if the visibility didn't change. No
         // biggie.
         if (!(d->m_options & FrameOption_AlwaysShowsTabs))
-            d->hasTabsVisibleChanged.emit();
+            safeEmitSignal(d->hasTabsVisibleChanged);
 
         const DockWidget::List docks = dockWidgets();
         for (DockWidget *dock : docks) {
@@ -424,21 +422,21 @@ void Group::onDockWidgetCountChanged()
         }
 
         if (auto fw = floatingWindow()) {
-            fw->dptr()->numDockWidgetsChanged.emit();
+            safeEmitSignal(fw->dptr()->numDockWidgetsChanged);
         }
     }
 
-    d->numDockWidgetsChanged.emit();
+    safeEmitSignal(d->numDockWidgetsChanged);
 }
 
 void Group::isFocusedChangedCallback()
 {
-    d->isFocusedChanged.emit();
+    safeEmitSignal(d->isFocusedChanged);
 }
 
 void Group::focusedWidgetChangedCallback()
 {
-    d->focusedWidgetChanged.emit();
+    safeEmitSignal(d->focusedWidgetChanged);
 }
 
 void Group::updateTitleBarVisibility()
@@ -470,10 +468,10 @@ void Group::updateTitleBarVisibility()
     m_titleBar->setVisible(visible);
 
     if (wasVisible != visible) {
-        d->actualTitleBarChanged.emit();
+        safeEmitSignal(d->actualTitleBarChanged);
         const auto docks = dockWidgets();
         for (auto dw : docks)
-            dw->d->actualTitleBarChanged.emit();
+            safeEmitSignal(dw->d->actualTitleBarChanged);
     }
 
     if (auto fw = floatingWindow()) {
@@ -1040,13 +1038,25 @@ LayoutingGuest *Group::asLayoutingGuest() const
     return d;
 }
 
+bool Group::close() const
+{
+    bool allAccepted = true;
+
+    const DockWidget::List docks = dockWidgets();
+    for (DockWidget *dock : docks) {
+        allAccepted = allAccepted && dock->close();
+    }
+
+    return allAccepted;
+}
+
 Group::Private::Private(Group *qq, int userType, FrameOptions options)
     : q(qq)
     , m_userType(userType)
     , m_options(options)
 {
     m_parentViewChangedConnection = q->Controller::dptr()->parentViewChanged.connect([this] {
-        hostChanged.emit(host());
+        safeEmitSignal(hostChanged, host());
     });
 
     q->view()->d->layoutInvalidated.connect([this] {
@@ -1070,7 +1080,7 @@ Group::Private::Private(Group *qq, int userType, FrameOptions options)
 
             // Here we tell the KDDW layout that a widget change min/max sizes.
             // KDDW will do some resizing to honour the new min/max constraint
-            layoutInvalidated.emit();
+            safeEmitSignal(layoutInvalidated);
         }
     });
 }
@@ -1079,7 +1089,7 @@ Group::Private::~Private()
 {
     m_visibleWidgetCountChangedConnection->disconnect();
 
-    beingDestroyed.emit();
+    safeEmitSignal(beingDestroyed);
 }
 
 Core::Group *Group::fromItem(const Core::Item *item)

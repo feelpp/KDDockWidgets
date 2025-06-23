@@ -394,8 +394,7 @@ public:
     /// Similar to sideBarLocation(), but returns a bool
     bool isInSideBar() const;
 
-    /// @brief Returns whether this floating dock widget knows its previous docked location
-    /// Result only makes sense if it's floating.
+    /// @brief Returns whether this dock widget knows its previous docked location
     ///
     /// When you call dockWidget->setFloating(false) it will only dock if it knows where to.
     bool hasPreviousDockedLocation() const;
@@ -456,6 +455,16 @@ public:
     /// and return different TitleBar subclasses, depending on the type.
     void setUserType(int userType);
     int userType() const;
+
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    /// @brief Sets user data that can be attached to this dock widget
+    /// The user data is serialized when using LayoutSaver and can be retrieved with userData().
+    /// KDDW does not read or care about the contents of this data.
+    void setUserData(const QVariantMap &userData);
+
+    /// @brief Returns the user data attached to this dock widget
+    QVariantMap userData() const;
+#endif
 
     /// @brief Sets this dock widgets position to pos within the MDI layout
     /// This only applies if the main window is in MDI mode, which it is not by default

@@ -65,6 +65,7 @@ public:
     DropIndicatorAllowedFunc m_dropIndicatorAllowedFunc = nullptr;
     DragAboutToStartFunc m_dragAboutToStartFunc = nullptr;
     DragEndedFunc m_dragEndedFunc = nullptr;
+    DockWidgetTabIndexOverrideFunc m_restorePlaceholderTabIndexOverride = nullptr;
     ViewFactory *m_viewFactory = nullptr;
     Flags m_flags = Flag_Default;
     MDIFlags m_mdiFlags = MDIFlag_None;
@@ -76,7 +77,7 @@ public:
     int m_startDragDistance = -1;
     bool m_dropIndicatorsInhibited = false;
     bool m_layoutSaverStrictMode = false;
-    bool m_onlyProgrammaticDrag = false;
+    bool m_showTabsAtBottom = false;
 };
 
 Config::Config()
@@ -172,11 +173,16 @@ MainWindowFactoryFunc Config::mainWindowFactoryFunc() const
     return d->m_mainWindowFactoryFunc;
 }
 
-void Config::setViewFactory(ViewFactory *wf)
+void Config::setViewFactory(ViewFactory *factory)
 {
-    assert(wf);
+    if (factory == d->m_viewFactory)
+        return;
+
+    assert(factory);
     delete d->m_viewFactory;
-    d->m_viewFactory = wf;
+    d->m_viewFactory = factory;
+
+    Core::Platform::instance()->onViewFactoryChanged();
 }
 
 ViewFactory *Config::viewFactory() const
@@ -277,6 +283,16 @@ DragEndedFunc Config::dragEndedFunc() const
     return d->m_dragEndedFunc;
 }
 
+void Config::setDockWidgetTabIndexOverrideFunc(DockWidgetTabIndexOverrideFunc func)
+{
+    d->m_restorePlaceholderTabIndexOverride = func;
+}
+
+DockWidgetTabIndexOverrideFunc Config::dockWidgetTabIndexOverrideFunc() const
+{
+    return d->m_restorePlaceholderTabIndexOverride;
+}
+
 void Config::setAbsoluteWidgetMinSize(Size size)
 {
     if (!DockRegistry::self()->isEmpty(/*excludeBeingDeleted=*/false)) {
@@ -307,6 +323,16 @@ void Config::setAbsoluteWidgetMaxSize(Size size)
 Size Config::absoluteWidgetMaxSize() const
 {
     return Item::hardcodedMaximumSize;
+}
+
+void Config::setTabsAtBottom(bool show)
+{
+    d->m_showTabsAtBottom = show;
+}
+
+bool Config::tabsAtBottom() const
+{
+    return d->m_showTabsAtBottom;
 }
 
 Config::InternalFlags Config::internalFlags() const
@@ -429,16 +455,6 @@ void Config::setLayoutSaverStrictMode(bool is)
 bool Config::layoutSaverUsesStrictMode() const
 {
     return d->m_layoutSaverStrictMode;
-}
-
-void Config::setOnlyProgrammaticDrag(bool only)
-{
-    d->m_onlyProgrammaticDrag = only;
-}
-
-bool Config::onlyProgrammaticDrag() const
-{
-    return d->m_onlyProgrammaticDrag;
 }
 
 }

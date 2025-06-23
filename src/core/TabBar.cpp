@@ -221,10 +221,16 @@ void Core::TabBar::onMousePress(Point localPos)
     }
 }
 
-void Core::TabBar::onMouseDoubleClick(Point localPos)
+bool Core::TabBar::onMouseDoubleClick(Point localPos)
 {
-    if (DockWidget *dw = dockWidgetAt(localPos))
-        dw->setFloating(true);
+    if (Config::self().flags() & Config::Flag_DisableDoubleClick) {
+        return false;
+    } else if (DockWidget *dw = dockWidgetAt(localPos)) {
+        dw->setFloating(!dw->isFloating());
+        return true;
+    }
+
+    return false;
 }
 
 bool Core::TabBar::hasSingleDockWidget() const

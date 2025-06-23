@@ -30,12 +30,14 @@ class MainWindow;
 class DropArea;
 class Draggable;
 class ViewFactory;
+class Group;
 }
 
 typedef KDDockWidgets::Core::DockWidget *(*DockWidgetFactoryFunc)(const QString &name);
 typedef KDDockWidgets::Core::MainWindow *(*MainWindowFactoryFunc)(const QString &name, KDDockWidgets::MainWindowOptions);
 typedef bool (*DragAboutToStartFunc)(Core::Draggable *draggable);
 typedef void (*DragEndedFunc)();
+typedef int (*DockWidgetTabIndexOverrideFunc)(Core::DockWidget *dw, Core::Group *group, int tabIndex);
 
 /// @brief Function to allow more granularity to disallow where widgets are dropped
 ///
@@ -129,6 +131,7 @@ public:
         Flag_AllowSwitchingTabsViaMenu = 0x80000, ///< Allow switching tabs via a context menu when
                                                   ///< right clicking on the tab area
         Flag_AutoHideAsTabGroups = 0x100000, ///< If tabbed dockwidgets are sent to/from sidebar, they're all sent and restored together
+        Flag_DisableDoubleClick = 0x200000, ///< Do not maximize of float if a title or tab is double-clicked.
         Flag_Default = Flag_AeroSnapWithClientDecos ///< The defaults
     };
     Q_DECLARE_FLAGS(Flags, Flag)
@@ -344,6 +347,13 @@ public:
     void setDragEndedFunc(DragEndedFunc func);
     DragEndedFunc dragEndedFunc() const;
 
+    /// Allows to override the tabindex when restoring a dock widget to a tab
+    /// When a dock widget is un-floated (by double click on titlebar) it goes to its
+    /// previous know position in the main window. If that position was tabbed, the provided
+    /// func can be used to change the actual tabIndex that's used.
+    void setDockWidgetTabIndexOverrideFunc(DockWidgetTabIndexOverrideFunc func);
+    DockWidgetTabIndexOverrideFunc dockWidgetTabIndexOverrideFunc() const;
+
     ///@brief Used internally by the framework. Returns the function which was passed to
     /// setDropIndicatorAllowedFunc()
     /// By default it's nullptr.
@@ -361,6 +371,11 @@ public:
     /// be bigger than this one.
     void setAbsoluteWidgetMaxSize(Size size);
     Size absoluteWidgetMaxSize() const;
+
+    /// Shows tabs at the bottom of the tab view instead of top
+    /// defaults to false. Call this at start of application only.
+    void setTabsAtBottom(bool);
+    bool tabsAtBottom() const;
 
     ///@brief Disables our internal widget's paint events
     /// By default, KDDockWidget's internal widgets reimplement paintEvent(). Disabling them
@@ -404,12 +419,6 @@ public:
     /// Default is false.
     void setLayoutSaverStrictMode(bool);
     bool layoutSaverUsesStrictMode() const;
-
-    /// For disallowing DnD to be started by mouse and instead require doing programmatically
-    /// Default is false, DnD can be started by mouse, which is the most common use case.
-    /// @sa Core::DockWidget::startDragging()
-    void setOnlyProgrammaticDrag(bool);
-    bool onlyProgrammaticDrag() const;
 
 private:
     KDDW_DELETE_COPY_CTOR(Config)

@@ -109,7 +109,7 @@ public:
     void addPlaceholderItem(Core::Item *);
 
     ///@brief returns the last position, just for tests.
-    Position::Ptr &lastPosition();
+    Positions::Ptr &lastPosition();
 
     void forceClose();
     Point defaultCenterPosForFloating();
@@ -274,7 +274,7 @@ public:
     const LayoutSaverOptions layoutSaverOptions;
     Action *const toggleAction;
     Action *const floatAction;
-    Position::Ptr m_lastPosition = std::make_shared<Position>();
+    Positions::Ptr m_lastPositions = std::make_shared<Positions>();
     bool m_isPersistentCentralDockWidget = false;
     bool m_processingToggleAction = false;
     bool m_updatingToggleAction = false;
@@ -296,6 +296,9 @@ public:
     KDBindings::ScopedConnection m_toggleActionConnection;
     KDBindings::ScopedConnection m_floatActionConnection;
     CloseReason m_lastCloseReason = CloseReason::Unspecified;
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QVariantMap m_userData;
+#endif
 };
 
 }

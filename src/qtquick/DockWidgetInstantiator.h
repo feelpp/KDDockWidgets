@@ -13,13 +13,11 @@
 #define KD_DOCKWIDGET_INSTANTIATOR_P_H
 
 #include "qtquick/views/DockWidget.h"
-#include "qtquick/views/TitleBar.h"
 
 #include <QQmlParserStatus>
 #include <QQuickItem>
 #include <QString>
-
-#include <optional>
+#include <QQmlEngine>
 
 namespace KDDockWidgets {
 
@@ -35,6 +33,7 @@ namespace KDDockWidgets {
 class DockWidgetInstantiator : public QQuickItem
 {
     Q_OBJECT
+    QML_NAMED_ELEMENT(DockWidget)
     Q_PROPERTY(QString uniqueName READ uniqueName WRITE setUniqueName NOTIFY uniqueNameChanged)
     Q_PROPERTY(QString source READ source WRITE setSource NOTIFY sourceChanged)
     Q_PROPERTY(KDDockWidgets::QtQuick::DockWidget *dockWidget READ dockWidget NOTIFY

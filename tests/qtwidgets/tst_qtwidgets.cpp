@@ -129,7 +129,7 @@ EmbeddedWindow::~EmbeddedWindow() = default;
 inline EmbeddedWindow *createEmbeddedMainWindow(QSize sz)
 {
     // Tests a MainWindow which isn't a top-level window, but is embedded in another window
-    auto mainwindow = createMainWindow(QSize(600, 600), MainWindowOption_HasCentralFrame).release();
+    auto mainwindow = createMainWindow(QSize(600, 600), MainWindowOption_HasCentralGroup).release();
 
     auto window = new EmbeddedWindow(mainwindow);
 
@@ -163,6 +163,7 @@ private Q_SLOTS:
     void tstQGraphicsProxyWidget();
 
     // But these are fine to be widget only:
+    void tst_controllerToView();
     void tst_designerMainWindow();
     void tst_tabsNotClickable();
     void tst_embeddedMainWindow();
@@ -199,6 +200,8 @@ private Q_SLOTS:
     void tst_moveTab_data();
     void tst_nestedMainWindowToggle();
     void tst_nestedMainWindowFloatButton();
+    void tst_nestedMainWindowSaveRestore_data();
+    void tst_nestedMainWindowSaveRestore();
     void tst_focusBetweenTabs();
     void addDockWidgetToSide();
     void addDockWidgetToSide2();
@@ -236,6 +239,9 @@ private Q_SLOTS:
     void tst_complex();
     void tst_restoreFloatingMaximizedState();
     void tst_findAncestor();
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    void tst_userData();
+#endif
 };
 
 void TestQtWidgets::tst_designerMainWindow()
@@ -437,7 +443,7 @@ void TestQtWidgets::tst_mdi_mixed_with_docking()
     // Press the float button
     tb1->onFloatClicked();
 
-    QVERIFY(mdiWidget1->d->lastPosition()->isValid());
+    QVERIFY(mdiWidget1->d->lastPosition()->lastItem());
     QVERIFY(mdiWidget1->titleBar()->isVisible());
     QVERIFY(mdiWidget1->isFloating());
 
@@ -603,7 +609,7 @@ void TestQtWidgets::tst_mdi_mixed_with_docking2()
     QVERIFY(mdiTitleBar->isVisible());
 
     QVERIFY(!mdiWidget3->isFloating());
-    QVERIFY(mdiWidget3->d->lastPosition()->isValid());
+    QVERIFY(mdiWidget3->d->lastPosition()->lastItem());
     mdiTitleBar->onFloatClicked();
     QVERIFY(mdiWidget3->isFloating());
 
@@ -882,7 +888,7 @@ void TestQtWidgets::tst_openWhenOnSideBar()
         QVERIFY(!m1->overlayedDockWidget());
         QVERIFY(m1->anySideBarIsVisible());
 
-        QVERIFY(!dw1->dptr()->m_lastPosition->wasFloating());
+        QVERIFY(!dw1->dptr()->m_lastPositions->wasFloating());
         dw1->open();
 
         QVERIFY(!m1->overlayedDockWidget());
@@ -1424,7 +1430,7 @@ void TestQtWidgets::tst_negativeAnchorPositionWhenEmbedded()
         auto em = createEmbeddedMainWindow(QSize(500, 500));
         m = em->mainWindow;
     } else {
-        m = createMainWindow(QSize(500, 500), MainWindowOption_HasCentralFrame).release();
+        m = createMainWindow(QSize(500, 500), MainWindowOption_HasCentralGroup).release();
         m->view()->resize(QSize(500, 500));
         m->show();
     }
@@ -1729,7 +1735,7 @@ void TestQtWidgets::tst_maxSizeHonouredWhenAnotherDropped()
 void TestQtWidgets::tst_addToHiddenMainWindow()
 {
     EnsureTopLevelsDeleted e;
-    auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, {}, false);
+    auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, {}, false);
     auto w1 = Platform::instance()->tests_createView({ true, {}, QSize(400, 400) });
     auto w2 = Platform::instance()->tests_createView({ true, {}, QSize(400, 400) });
     auto d1 = createDockWidget("1", w1);
@@ -2138,6 +2144,55 @@ void TestQtWidgets::tst_findAncestor()
     QCOMPARE(mainWindow, KDDockWidgets::findAncestor<QMainWindow>(dockWidget));
 }
 
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+void TestQtWidgets::tst_userData()
+{
+    QByteArray saved;
+
+    QVariantMap userData1;
+    userData1["key1"] = "value1";
+    userData1["key2"] = 123;
+    userData1["key3"] = true;
+
+    QVariantMap userData2;
+    userData2["name"] = "Test Dock";
+    userData2["priority"] = 5;
+    userData2["nested"] = QVariantMap { { "subkey", "subvalue" } };
+
+    {
+        EnsureTopLevelsDeleted e;
+        auto m = createMainWindow({}, {}, "mw1");
+
+        auto dock1 = createDockWidget("dock1");
+        dock1->setUserData(userData1);
+
+        auto dock2 = createDockWidget("dock2");
+        dock2->setUserData(userData2);
+
+        QCOMPARE(dock1->userData(), userData1);
+        QCOMPARE(dock2->userData(), userData2);
+
+        LayoutSaver saver;
+        saved = saver.serializeLayout();
+    }
+
+    EnsureTopLevelsDeleted e;
+
+    QVERIFY(!saved.isEmpty());
+
+    auto m = createMainWindow({}, {}, "mw1");
+
+    auto dock1 = createDockWidget("dock1");
+    auto dock2 = createDockWidget("dock2");
+
+    LayoutSaver restorer;
+
+    QVERIFY(restorer.restoreLayout(saved));
+    QCOMPARE(dock1->userData(), userData1);
+    QCOMPARE(dock2->userData(), userData2);
+}
+#endif
+
 void TestQtWidgets::tst_standaloneTitleBar()
 {
     QWidget window;
@@ -2278,6 +2333,62 @@ void TestQtWidgets::tst_moveTab()
     QCOMPARE(tb->currentDockWidget(), dockA);
 }
 
+void TestQtWidgets::tst_nestedMainWindowSaveRestore_data()
+{
+    QTest::addColumn<bool>("nestFurther");
+
+    QTest::newRow("true") << true; // parented to DockWidget
+    QTest::newRow("false") << false; // parented to intermediate container
+}
+
+void TestQtWidgets::tst_nestedMainWindowSaveRestore()
+{
+    // This is for #508 . Do not change this configuration.
+    // tests that a save/restore of tabbed nested main windows does not
+    // hide the main window
+
+
+    QFETCH(bool, nestFurther);
+    EnsureTopLevelsDeleted e;
+
+    auto mainWindow = createMainWindow(QSize(1000, 1000), MainWindowOption_None, "MW1");
+    auto nestedMainWindow1 = createMainWindow(QSize(500, 500), MainWindowOption_None, "MW1.1");
+    nestedMainWindow1->setAffinities({ "foo1" });
+    auto nestedMainWindow2 = createMainWindow(QSize(500, 500), MainWindowOption_None, "MW1.2");
+    nestedMainWindow2->setAffinities({ "foo2" });
+
+    auto containerDock1 = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("Nested MainWindow Dock container1"));
+    auto containerDock2 = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("Nested MainWindow Dock container2"));
+    auto nestedMainWindowQWidget1 = static_cast<QMainWindow *>(QtCommon::View_qt::asQWidget(nestedMainWindow1->view()));
+    auto nestedMainWindowQWidget2 = static_cast<QMainWindow *>(QtCommon::View_qt::asQWidget(nestedMainWindow2->view()));
+
+
+    if (nestFurther) {
+        auto container1 = new QWidget();
+        auto container2 = new QWidget();
+        auto lay1 = new QVBoxLayout(container1);
+        auto lay2 = new QVBoxLayout(container2);
+        lay1->addWidget(nestedMainWindowQWidget1);
+        lay2->addWidget(nestedMainWindowQWidget2);
+
+        containerDock1->setWidget(container1);
+        containerDock2->setWidget(container2);
+    } else {
+        containerDock1->setWidget(nestedMainWindowQWidget1);
+        containerDock2->setWidget(nestedMainWindowQWidget2);
+    }
+
+    mainWindow->addDockWidget(containerDock1->asDockWidgetController(), KDDockWidgets::Location_OnRight);
+    mainWindow->addDockWidget(containerDock2->asDockWidgetController(), KDDockWidgets::Location_OnRight);
+
+    containerDock1->addDockWidgetAsTab(containerDock2);
+    containerDock1->setAsCurrentTab();
+
+    LayoutSaver saver;
+    QVERIFY(saver.restoreLayout(saver.serializeLayout()));
+    QVERIFY(mainWindow->isVisible());
+}
+
 void TestQtWidgets::tst_nestedMainWindowFloatButton()
 {
     // Bug 1 reported in #464:
@@ -2410,14 +2521,14 @@ void TestQtWidgets::tst_focusBetweenTabs()
     leFloating->setFocus();
     QVERIFY(dock3->dockWidget()->isCurrentTab());
     m1->view()->activateWindow();
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(1);
+    QTest::qWait(1);
     le3->setFocus();
 
     QVERIFY(le3->hasFocus());
     dock2->setAsCurrentTab();
     QVERIFY(dock2->dockWidget()->isCurrentTab());
     le2->setFocus();
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(1);
+    QTest::qWait(1);
     QVERIFY(le2->hasFocus());
 
     // 2. Now, cycling tabs should toggle focus between le2 and le3
@@ -2443,7 +2554,7 @@ void TestQtWidgets::tst_focusBetweenTabs()
     auto titlebarFloating = floatingDock->actualTitleBar()->view();
     QVERIFY(titlebarFloating->isVisible());
     titlebarFloating->setFocus(Qt::MouseFocusReason);
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(1000);
+    QTest::qWait(1000);
 
     QVERIFY(leFloating->hasFocus());
     QVERIFY(!le1->hasFocus());
@@ -2455,7 +2566,7 @@ void TestQtWidgets::addDockWidgetToSide()
 {
     EnsureTopLevelsDeleted e;
     KDDockWidgets::Config::self().setFlags(KDDockWidgets::Config::Flag_TitleBarIsFocusable);
-    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
 
     auto d1 = new QtWidgets::DockWidget("d1");
     auto d2 = new QtWidgets::DockWidget("d2");
@@ -2506,7 +2617,7 @@ void TestQtWidgets::addDockWidgetToSide2()
     // Tests adding relative to a StartHidden
 
     EnsureTopLevelsDeleted e;
-    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
 
     auto d1 = new QtWidgets::DockWidget("d1");
     auto d2 = new QtWidgets::DockWidget("d2");
@@ -2530,7 +2641,7 @@ void TestQtWidgets::addDockWidgetToSide3()
 {
     // Tests adding relative to a StartHidden but the new one is also hidden
     EnsureTopLevelsDeleted e;
-    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
 
     auto d1 = new QtWidgets::DockWidget("d1");
     auto d2 = new QtWidgets::DockWidget("d2");
@@ -2555,7 +2666,7 @@ void TestQtWidgets::addDockWidgetToSide4()
 {
     // Tests a case where generated layout would be off by a few pixels
     EnsureTopLevelsDeleted e;
-    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
 
     auto dummy1 = new QtWidgets::DockWidget("dummy1");
     auto dummy2 = new QtWidgets::DockWidget("dummy2");
@@ -2592,7 +2703,7 @@ void TestQtWidgets::addDockWidgetToSide5()
 {
     // Tests a case where generated layout would be off by a few pixels
     EnsureTopLevelsDeleted e;
-    auto m1 = createMainWindow(QSize(1002, 1002), MainWindowOption_HasCentralFrame, "mw1");
+    auto m1 = createMainWindow(QSize(1002, 1002), MainWindowOption_HasCentralGroup, "mw1");
 
     auto rightVisible = new QtWidgets::DockWidget("rightVisible");
     auto rightHidden = new QtWidgets::DockWidget("rightHidden");
@@ -2612,7 +2723,7 @@ void TestQtWidgets::addDockWidgetToSideCrash()
     // This test just ensures it doesn't regress
     {
         EnsureTopLevelsDeleted e;
-        auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+        auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
 
         auto bottom1 = new QtWidgets::DockWidget("bottom1");
         auto left1 = new QtWidgets::DockWidget("left1");
@@ -2638,7 +2749,7 @@ void TestQtWidgets::addDockWidgetToSideCrash()
 
     {
         EnsureTopLevelsDeleted e;
-        auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+        auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
 
         auto dummy1 = new QtWidgets::DockWidget("dummy1");
         auto dummy2 = new QtWidgets::DockWidget("dummy2");
@@ -2718,7 +2829,7 @@ void TestQtWidgets::tst_crashDuringRestore()
     // Contrived case where if dockWidget->open() was called during restore it would crash
 
     EnsureTopLevelsDeleted e;
-    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
     auto d1 = new QtWidgets::DockWidget("d1");
     auto d3 = new QtWidgets::DockWidget("d3");
     m1->addDockWidget(d1->asDockWidgetController(), Location_OnRight);
@@ -2738,7 +2849,7 @@ void TestQtWidgets::tst_toggleVsShowHidden()
 {
     // Tests that the QAction doesn't fire when adding as hidden
     EnsureTopLevelsDeleted e;
-    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralFrame, "mw1");
+    auto m1 = createMainWindow(QSize(1000, 1000), MainWindowOption_HasCentralGroup, "mw1");
     auto d1 = new QtWidgets::DockWidget("d1");
     QVERIFY(!d1->toggleAction()->isChecked());
     QVERIFY(!d1->isOpen());
@@ -2970,6 +3081,20 @@ void TestQtWidgets::tst_restoreInvalidPercentages()
 
     LayoutSaver saver;
     QVERIFY(!saver.serializeLayout().isEmpty());
+}
+
+
+void TestQtWidgets::tst_controllerToView()
+{
+    EnsureTopLevelsDeleted e;
+    auto dw = createDockWidget("dw1", Platform::instance()->tests_createView({ true }));
+    auto dwView = KDDockWidgets::controllerToView<QtWidgets::DockWidget>(dw);
+
+    std::vector<Core::DockWidget *> dws = { dw };
+    auto dwViews = KDDockWidgets::controllersToViews<QtWidgets::DockWidget>(dws);
+
+    QCOMPARE(dw->view(), dwView);
+    QCOMPARE(dws[0]->view(), dwView);
 }
 
 int main(int argc, char *argv[])

@@ -17,6 +17,7 @@
 #include "kddockwidgets/docks_export.h"
 
 #include <QQuickItem>
+#include <QQmlEngine>
 
 namespace KDDockWidgets::Core {
 class Separator;
@@ -29,6 +30,8 @@ namespace QtQuick {
 class DOCKS_EXPORT Separator : public QtQuick::View
 {
     Q_OBJECT
+    QML_NAMED_ELEMENT(SeparatorView)
+    QML_UNCREATABLE("Created by the framework only.")
     Q_PROPERTY(bool isVertical READ isVertical NOTIFY isVerticalChanged)
 public:
     explicit Separator(Core::Separator *controller, QQuickItem *parent = nullptr);
@@ -45,7 +48,7 @@ Q_SIGNALS:
     void isVerticalChanged();
 
 private:
-    void init() override final;
+    void init() final;
     QSize minSize() const override;
     Core::Separator *const m_controller;
 };

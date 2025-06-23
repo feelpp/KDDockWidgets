@@ -11,7 +11,7 @@
 # Pass the following variables to cmake to control the build:
 #
 # -DKDDockWidgets_QT6=[true|false] Build against Qt6 rather than Qt5
-# Default=false (Qt5 will be used even if Qt6 is available)
+# Default=true
 #
 # -DKDDockWidgets_STATIC=[true|false] Build static versions of the libraries
 # Default=false
@@ -37,7 +37,7 @@
 # frontends to enable. If not specified, Qt frontends will be enabled based on
 # availability of libraries on your system.
 
-# ## DO NOT USE IF YOU ARE AN END-USER.  FOR THE DEVELOPERS ONLY!! # Special
+# # # DO NOT USE IF YOU ARE AN END-USER.  FOR THE DEVELOPERS ONLY!! # Special
 # CMake Options for Developers
 #
 # -DKDDockWidgets_DEVELOPER_MODE=[true|false] Configure the build for a
@@ -61,6 +61,10 @@ set(KDAB_INSTALL
     CACHE INTERNAL "Install to default KDAB Location"
 )
 
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)
+endif()
+
 if(DEFINED CMAKE_INSTALL_PREFIX)
     if(NOT "${CMAKE_INSTALL_PREFIX}" STREQUAL "")
         set(KDAB_INSTALL
@@ -77,12 +81,16 @@ project(
     LANGUAGES CXX C
 )
 
-set(KDDockWidgets_VERSION_MAJOR 2)
-set(KDDockWidgets_VERSION_MINOR 1)
-set(KDDockWidgets_VERSION_PATCH 1)
-set(KDDockWidgets_VERSION ${KDDockWidgets_VERSION_MAJOR}.${KDDockWidgets_VERSION_MINOR}.${KDDockWidgets_VERSION_PATCH})
+file(STRINGS version.txt KDDW_VERSION_FILE)
+list(GET KDDW_VERSION_FILE 0 KDDockWidgets_VERSION)
+
+string(REPLACE "." ";" KDDW_VERSION_LIST "${KDDockWidgets_VERSION}")
+list(GET KDDW_VERSION_LIST 0 KDDockWidgets_VERSION_MAJOR)
+list(GET KDDW_VERSION_LIST 1 KDDockWidgets_VERSION_MINOR)
+list(GET KDDW_VERSION_LIST 2 KDDockWidgets_VERSION_PATCH)
+
 set(PROJECT_VERSION ${KDDockWidgets_VERSION}) # PROJECT_VERSION is needed by some ECM modules
-set(KDDockWidgets_SOVERSION "2.1")
+set(KDDockWidgets_SOVERSION "3")
 
 include(FeatureSummary)
 
@@ -96,7 +104,7 @@ set(KDDockWidgets_LIBRARY_POSTFIX
     CACHE STRING "Appends the specified string to the library name. Not applicable to VS generator."
 )
 
-option(KDDockWidgets_QT6 "Build against Qt 6" OFF)
+option(KDDockWidgets_QT6 "Build against Qt 6" ON)
 option(KDDockWidgets_DEVELOPER_MODE "Developer Mode" OFF)
 option(KDDockWidgets_PYTHON_BINDINGS "Build python bindings" OFF)
 option(KDDockWidgets_STATIC "Build statically" OFF)
@@ -104,18 +112,20 @@ option(KDDockWidgets_TESTS "Build the tests" OFF)
 option(KDDockWidgets_WAYLAND_TESTS "Build the wayland tests" OFF)
 option(KDDockWidgets_EXAMPLES "Build the examples" ON)
 option(KDDockWidgets_DOCS "Build the API documentation" OFF)
-option(KDDockWidgets_WERROR "Use -Werror (will be true for developer-mode unconditionally)" OFF)
+option(KDDockWidgets_WERROR "Use -Werror (will be true for developer-mode unconditionally)"
+       ${KDDockWidgets_DEVELOPER_MODE}
+)
 option(KDDockWidgets_X11EXTRAS
        "Link against QtX11Extras to detect if the compositor supports transparency. Not applicable on non-Linux or Qt6."
        ON
 )
 option(KDDockWidgets_XLib "On Linux, link against XLib, for a more robust window z-order detection." OFF)
 option(KDDockWidgets_CODE_COVERAGE "Enable coverage reporting" OFF)
-option(KDDockWidgets_FLUTTER_NO_BINDINGS "Don't build flutter bindings, only the flutter frontend" OFF)
 option(KDDockWidgets_FLUTTER_TESTS_AOT "Flutter tests will be built in AOT mode" OFF)
 option(KDDockWidgets_NO_SPDLOG "Don't use spdlog, even if it is found." OFF)
 option(KDDockWidgets_USE_LLD "Use lld for linking" OFF)
 option(KDDockWidgets_USE_VALGRIND "Runs the tests under valgrind" OFF)
+option(KDDockWidgets_QML_MODULE "The QtQuick support will be built as a QML module" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/ECM/modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/KDAB/modules")
@@ -153,6 +163,13 @@ else()
     set(QT_MIN_VERSION "5.15")
 endif()
 
+if(KDDockWidgets_DEVELOPER_MODE
+   AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "14.1"
+)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fhardened -O1")
+endif()
+
 # BEGIN frontend enabling
 
 set(KDDW_FRONTEND_QTWIDGETS OFF)
@@ -172,16 +189,26 @@ endif()
 if(KDDockWidgets_FRONTENDS)
     if("qtwidgets" IN_LIST KDDockWidgets_FRONTENDS)
         find_package(Qt${QT_VERSION_MAJOR} ${QT_MIN_VERSION} NO_MODULE REQUIRED COMPONENTS Widgets)
+        if(Qt6Core_VERSION VERSION_GREATER_EQUAL "6.10.0")
+            set(QT_NO_PRIVATE_MODULE_WARNING ON)
+            find_package(Qt6 ${QT_MIN_VERSION} NO_MODULE REQUIRED COMPONENTS WidgetsPrivate)
+        endif()
+
         set(KDDW_FRONTEND_QTWIDGETS ON)
     endif()
 
     if("qtquick" IN_LIST KDDockWidgets_FRONTENDS)
         find_package(Qt${QT_VERSION_MAJOR} ${QT_MIN_VERSION} NO_MODULE REQUIRED COMPONENTS Quick QuickControls2)
+        if(Qt6Core_VERSION VERSION_GREATER_EQUAL "6.10.0")
+            set(QT_NO_PRIVATE_MODULE_WARNING ON)
+            find_package(Qt6 ${QT_MIN_VERSION} NO_MODULE REQUIRED COMPONENTS QuickPrivate)
+        endif()
         set(KDDW_FRONTEND_QTQUICK ON)
     endif()
 
     if("flutter" IN_LIST KDDockWidgets_FRONTENDS)
         set(KDDW_FRONTEND_FLUTTER ON)
+
     endif()
 
     if("none" IN_LIST KDDockWidgets_FRONTENDS)
@@ -191,18 +218,26 @@ else()
     set(ENABLED_FRONTENDS "")
     message("No frontends specified explicitly.")
 
-    # qtwidgets
+    # find Qt modules before defining which frontends to build
     find_package(Qt${QT_VERSION_MAJOR} ${QT_MIN_VERSION} NO_MODULE COMPONENTS Widgets Quick QuickControls2)
 
     if(Qt${QT_VERSION_MAJOR}Widgets_FOUND)
         list(APPEND ENABLED_FRONTENDS "qtwidgets")
         set(KDDW_FRONTEND_QTWIDGETS ON)
+        if(Qt6Core_VERSION VERSION_GREATER_EQUAL "6.10.0")
+            set(QT_NO_PRIVATE_MODULE_WARNING ON)
+            find_package(Qt6 ${QT_MIN_VERSION} NO_MODULE REQUIRED COMPONENTS WidgetsPrivate)
+        endif()
     endif()
 
     # qtquick
     if(Qt${QT_VERSION_MAJOR}Quick_FOUND AND Qt${QT_VERSION_MAJOR}QuickControls2_FOUND)
         list(APPEND ENABLED_FRONTENDS "qtquick")
         set(KDDW_FRONTEND_QTQUICK ON)
+        if(Qt6Core_VERSION VERSION_GREATER_EQUAL "6.10.0")
+            set(QT_NO_PRIVATE_MODULE_WARNING ON)
+            find_package(Qt6 ${QT_MIN_VERSION} NO_MODULE REQUIRED COMPONENTS QuickPrivate)
+        endif()
     endif()
 
     if(NOT ENABLED_FRONTENDS)
@@ -228,15 +263,20 @@ if(KDDW_FRONTEND_QTWIDGETS OR KDDW_FRONTEND_QTQUICK)
     set(KDDW_FRONTEND_QT ON)
 endif()
 
+if(KDDockWidgets_QML_MODULE AND Qt6Core_VERSION VERSION_LESS "6.8.0")
+    # We have workarounds for QTBUG-101146, but only since 6.8 the generated includes are guarded
+    # with _has_include
+    message(WARNING "KDDockWidgets_QML_MODULE=ON ignored. Only available since Qt 6.8.")
+    set(KDDockWidgets_QML_MODULE OFF)
+endif()
+
+if(KDDockWidgets_QML_MODULE AND (NOT KDDW_FRONTEND_QTQUICK OR NOT KDDockWidgets_QT6))
+    message(WARNING "KDDockWidgets_QML_MODULE=ON ignored. Only available for QtQuick on Qt6.")
+endif()
+
 if(KDDW_FRONTEND_FLUTTER)
     if(KDDW_FRONTEND_QT)
         message(FATAL_ERROR "The flutter frontend is not compatible with the Qt frontends. Chose a single one.")
-    endif()
-
-    if(KDDockWidgets_DEVELOPER_MODE AND (APPLE OR WIN32))
-        message(FATAL_ERROR "The flutter frontend only supports developer-mode on Linux. "
-                            "You can still develop on Windows/macOS but wait for test results from KDAB CI."
-        )
     endif()
 endif()
 
@@ -314,27 +354,29 @@ endif()
 # Always build the test harness in developer-mode
 if(KDDockWidgets_DEVELOPER_MODE)
     set(KDDockWidgets_TESTS ON)
-    set(KDDockWidgets_WERROR ON)
-    include(ECMEnableSanitizers)
+
+    if(KDDockWidgets_ENABLE_SANITIZERS)
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+            # clang-cl preset isn't working
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
+        elseif(MSVC)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+        else()
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined")
+            set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+        endif()
+    endif()
+
+    if(NOT MSVC)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fno-optimize-sibling-calls")
+    endif()
 
     # Enable assert() in developer mode, regardless of debug vs release
     add_definitions(-UNDEBUG)
 
-    if(KDDW_FRONTEND_FLUTTER)
-        include(FetchContent)
-        set(GLFW_BUILD_EXAMPLE OFF)
-        set(GLFW_BUILD_DOCS OFF)
-        set(GLFW_BUILD_WIN32 ON)
-        set(GLFW_BUILD_TESTS OFF)
-        set(GLFW_USE_WAYLAND OFF)
-
-        fetchcontent_declare(
-            glfw3
-            GIT_REPOSITORY https://github.com/glfw/glfw.git
-            GIT_TAG 3fa2360720eeba1964df3c0ecf4b5df8648a8e52
-        )
-        fetchcontent_makeavailable(glfw3)
-    endif()
+    # Enable Qml debugger in developer mode
+    add_definitions(-DQT_QML_DEBUG)
 endif()
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -345,10 +387,13 @@ endif()
 
 if(KDDW_FRONTEND_QT)
     set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_AUTOMOC ON)
-    set(CMAKE_AUTORCC ON)
 else()
     set(CMAKE_CXX_STANDARD 20)
+endif()
+
+if(KDDW_FRONTEND_QT)
+    set(CMAKE_AUTOMOC ON)
+    set(CMAKE_AUTORCC ON)
 endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -381,10 +426,6 @@ macro(set_compiler_flags targetName)
         if(MSVC)
             target_compile_options(${targetName} PRIVATE /W4)
         endif()
-
-        if(KDDW_FRONTEND_FLUTTER AND NOT MSVC)
-            target_compile_options(${targetName} PRIVATE -fcoroutines -Wno-missing-field-initializers)
-        endif()
     else()
         if(KDDW_FRONTEND_FLUTTER)
             # Our Dart bindings are auto-generated and they include methods guarded with DOCKS_TESTING_METHODS
@@ -395,8 +436,16 @@ macro(set_compiler_flags targetName)
     endif()
 
     # Enable -Werror
-    if(KDDockWidgets_WERROR AND (NOT MSVC OR IS_CLANG_BUILD)) # clang-cl accepts these too
-        target_compile_options(${targetName} PRIVATE -Werror -Wundef -Wno-error=deprecated-declarations)
+    if(KDDockWidgets_WERROR)
+        if(MSVC)
+            if(KDDockWidgets_QT6 AND NOT ${targetName} MATCHES "^tst_")
+                # don't werror the tests
+                # /wd4702 unreachable code after std::terminate
+                target_compile_options(${targetName} PRIVATE /WX /wd4702)
+            endif()
+        else()
+            target_compile_options(${targetName} PRIVATE -Werror -Wundef -Wno-error=deprecated-declarations)
+        endif()
     endif()
 
     if(KDDockWidgets_HAS_SPDLOG)
@@ -498,6 +547,9 @@ endif()
 # workaround for CMAKE_CURRENT_FUNCTION_LIST_DIR below CMake 3.17
 set(KKDockWidgets_PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 
+find_package(KDBindings QUIET)
+include(src/kdbindings.cmake)
+
 if(KDDockWidgets_TESTS)
     enable_testing()
 endif()
@@ -534,7 +586,7 @@ if(KDDockWidgets_EXAMPLES)
         add_subdirectory(src/core/layouting/examples/qtwidgets/)
     endif()
 
-    if(KDDW_FRONTEND_FLUTTER AND NOT KDDockWidgets_FLUTTER_NO_BINDINGS)
+    if(KDDW_FRONTEND_FLUTTER)
         add_custom_target(
             kddw-flutter-example ALL
             DEPENDS ${CMAKE_SOURCE_DIR}/examples/flutter/build/linux/x64/debug/bundle/kddockwidgets_flutter_example

@@ -167,7 +167,9 @@ Icon TitleBar::icon() const
 
 bool TitleBar::onDoubleClicked()
 {
-    if ((Config::self().flags() & Config::Flag_DoubleClickMaximizes) && m_floatingWindow) {
+    if (Config::self().flags() & Config::Flag_DisableDoubleClick) {
+        return false;
+    } else if ((Config::self().flags() & Config::Flag_DoubleClickMaximizes) && m_floatingWindow) {
         // Not using isFloating(), as that can be a dock widget nested in a floating window. By
         // convention it's floating, but it's not the title bar of the top-level window.
         toggleMaximized();
@@ -468,8 +470,10 @@ void TitleBar::onFloatClicked()
                     return;
                 }
 
+                Group *group = dockWidgets[0]->d->group();
+
                 // suppress "isFloatingChanged" signals, as we're doing the float/unfloat hack
-                Group::s_inFloatHack = true;
+                Group::s_inFloatHack = group ? group->layoutItem() : nullptr;
 
                 int i = 0;
                 DockWidget *current = nullptr;
@@ -478,11 +482,11 @@ void TitleBar::onFloatClicked()
                         current = dock;
 
                     dock->setFloating(true);
-                    dock->dptr()->m_lastPosition->m_tabIndex = i;
+                    dock->dptr()->m_lastPositions->m_tabIndex = i;
                     dock->setFloating(false);
                     ++i;
                 }
-                Group::s_inFloatHack = false;
+                Group::s_inFloatHack = nullptr;
 
                 // Restore the current tab
                 if (current)

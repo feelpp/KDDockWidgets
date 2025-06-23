@@ -79,7 +79,7 @@ DockWidget::~DockWidget()
     d->m_windowActivatedConnection->disconnect();
     d->m_windowDeactivatedConnection->disconnect();
 
-    d->aboutToDelete.emit(this);
+    safeEmitSignal(d->aboutToDelete, this);
     DockRegistry::self()->unregisterDockWidget(this);
     delete d;
 }
@@ -440,7 +440,7 @@ void DockWidget::show()
 void DockWidget::open()
 {
     if (view()->isRootView()
-        && (d->m_lastPosition->wasFloating() || !d->m_lastPosition->isValid())) {
+        && (d->m_lastPositions->wasFloating() || d->m_lastPositions->lastItem(this) == nullptr)) {
         // Create the FloatingWindow already, instead of waiting for the show event.
         // This reduces flickering on some platforms
         d->morphIntoFloatingWindow();
@@ -549,7 +549,7 @@ bool DockWidget::isInSideBar() const
 
 bool DockWidget::hasPreviousDockedLocation() const
 {
-    return d->m_lastPosition->isValid();
+    return d->m_lastPositions->lastItem(this);
 }
 
 Size DockWidget::lastOverlayedSize() const
@@ -587,7 +587,7 @@ void DockWidget::setFloatingGeometry(Rect geometry)
     if (isOpen() && isFloating()) {
         view()->rootView()->setGeometry(geometry);
     } else {
-        d->m_lastPosition->setLastFloatingGeometry(geometry);
+        d->m_lastPositions->setLastFloatingGeometry(geometry);
     }
 }
 
@@ -605,7 +605,7 @@ Core::FloatingWindow *DockWidget::Private::morphIntoFloatingWindow()
         return fw; // Nothing to do
 
     if (q->view()->isRootView()) {
-        Rect geo = m_lastPosition->lastFloatingGeometry();
+        Rect geo = m_lastPositions->lastFloatingGeometry();
         if (geo.isNull()) {
             geo = q->geometry();
 
@@ -794,7 +794,7 @@ void DockWidget::Private::updateFloatAction()
                                        true); // Guard against recursiveness
 
     if (q->isFloating()) {
-        floatAction->setEnabled(m_lastPosition->isValid());
+        floatAction->setEnabled(m_lastPositions->lastItem(q));
         floatAction->setChecked(true);
         floatAction->setToolTip(Object::tr("Dock"));
     } else {
@@ -833,7 +833,7 @@ void DockWidget::Private::close()
         && q->isVisible()) { // only user-closing is interesting to save the geometry
         // We check for isVisible so we don't save geometry if you call close() on an already closed
         // dock widget
-        m_lastPosition->setLastFloatingGeometry(q->view()->d->windowGeometry());
+        m_lastPositions->setLastFloatingGeometry(q->view()->d->windowGeometry());
     }
 
     if (!m_removingFromOverlay)
@@ -858,14 +858,13 @@ void DockWidget::Private::close()
 
 bool DockWidget::Private::restoreToPreviousPosition()
 {
-    if (!m_lastPosition->isValid())
+    Core::Item *item = m_lastPositions->lastItem(q);
+    if (!item)
         return false;
-
-    Core::Item *item = m_lastPosition->lastItem();
 
     Layout *layout = DockRegistry::self()->layoutForItem(item);
     assert(layout);
-    layout->restorePlaceholder(q, item, m_lastPosition->lastTabIndex());
+    layout->restorePlaceholder(q, item, m_lastPositions->lastTabIndex());
     return true;
 }
 
@@ -874,14 +873,11 @@ void DockWidget::Private::maybeRestoreToPreviousPosition()
     // This is called when we open a dock widget. Let's see if we have to restore it to a previous
     // position.
 
-    if (!m_lastPosition->isValid())
-        return;
-
-    Core::Item *layoutItem = m_lastPosition->lastItem();
+    Core::Item *layoutItem = m_lastPositions->lastItem(q);
     if (!layoutItem)
         return; // nothing to do, no last position
 
-    if (m_lastPosition->wasFloating())
+    if (m_lastPositions->wasFloating())
         return; // Nothing to do, it was floating before, now it'll just get visible
 
     Core::Group *group = this->group();
@@ -912,7 +908,7 @@ int DockWidget::Private::currentTabIndex() const
 
 void DockWidget::Private::saveTabIndex()
 {
-    m_lastPosition->saveTabIndex(currentTabIndex(), q->isFloating());
+    m_lastPositions->saveTabIndex(currentTabIndex(), q->isFloating());
 }
 
 void DockWidget::Private::onParentChanged()
@@ -946,6 +942,9 @@ Core::DockWidget *DockWidget::deserialize(const LayoutSaver::DockWidget::Ptr &sa
         if (auto guest = dw->guestView())
             guest->setVisible(true);
         dw->d->m_wasRestored = true;
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        dw->d->m_userData = saved->userData;
+#endif
 
         if (dw->affinities() != saved->affinities) {
             KDDW_ERROR("Affinity name changed from {} to {}", dw->affinities(), "; to", saved->affinities);
@@ -967,6 +966,18 @@ int DockWidget::userType() const
 {
     return d->m_userType;
 }
+
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+void DockWidget::setUserData(const QVariantMap &userData)
+{
+    d->m_userData = userData;
+}
+
+QVariantMap DockWidget::userData() const
+{
+    return d->m_userData;
+}
+#endif
 
 void DockWidget::setMDIPosition(Point pos)
 {
@@ -1020,6 +1031,9 @@ LayoutSaver::DockWidget::Ptr DockWidget::Private::serialize() const
     auto ptr = LayoutSaver::DockWidget::dockWidgetForName(q->uniqueName());
     ptr->affinities = q->affinities();
     ptr->lastCloseReason = m_lastCloseReason;
+#if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    ptr->userData = m_userData;
+#endif
 
     return ptr;
 }
@@ -1076,12 +1090,12 @@ DockWidget::Private::Private(const QString &dockName, DockWidgetOptions options_
 void DockWidget::Private::addPlaceholderItem(Core::Item *item)
 {
     assert(item);
-    m_lastPosition->addPlaceholderItem(item);
+    m_lastPositions->addPlaceholderItem(item);
 }
 
-Position::Ptr &DockWidget::Private::lastPosition()
+Positions::Ptr &DockWidget::Private::lastPosition()
 {
-    return m_lastPosition;
+    return m_lastPositions;
 }
 
 Core::Group *DockWidget::Private::group() const

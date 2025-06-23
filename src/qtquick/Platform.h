@@ -54,6 +54,10 @@ public:
     bool usesFallbackMouseGrabber() const override;
     bool inDisallowedDragView(QPoint globalPos) const override;
     void ungrabMouse() override;
+    void onViewFactoryChanged() override;
+
+    QtQuickHelpers *helpers() const;
+
     static Platform *instance();
 
     static Core::DockWidget *dockWidgetForItem(QQuickItem *);
@@ -68,11 +72,12 @@ public:
     Core::View *tests_createNonClosableView(Core::View *parent = nullptr) override;
     Core::MainWindow *
     createMainWindow(const QString &uniqueName, Core::CreateViewOptions,
-                     MainWindowOptions options = MainWindowOption_HasCentralFrame,
+                     MainWindowOptions options = MainWindowOption_HasCentralGroup,
                      Core::View *parent = nullptr, Qt::WindowFlags = {}) const override;
 #endif
 private:
     void init();
+    void updateViewFactoryContextProperty();
     QPointer<QQmlEngine> m_qmlEngine;
     QtQuickHelpers *const m_qquickHelpers;
     Q_DISABLE_COPY(Platform)

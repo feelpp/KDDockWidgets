@@ -32,6 +32,8 @@
 #include "core/MainWindow.h"
 #include "core/Window_p.h"
 
+#include <QTest>
+
 #include <vector>
 #include <memory>
 
@@ -44,6 +46,15 @@ static bool s_pauseBeforeMove = false; // for debugging
 #define DEBUGGING_PAUSE_DURATION 5000 // 5 seconds
 
 // clazy:excludeall=ctor-missing-parent-argument,missing-qobject-macro,range-loop,missing-typeinfo,detaching-member,function-args-by-ref,non-pod-global-static,reserve-candidates
+
+#define WAIT_FOR_RESIZE(window) \
+    KDDockWidgets::Core::Platform::instance()->tests_waitForResize(window)
+
+#define WAIT_FOR_DELETED(window) \
+    KDDockWidgets::Core::Platform::instance()->tests_waitForDeleted(window)
+
+#define WAIT_FOR_EVENT(window, event) \
+    KDDockWidgets::Core::Platform::instance()->tests_waitForEvent(window, event)
 
 namespace KDDockWidgets {
 
@@ -87,8 +98,8 @@ struct EnsureTopLevelsDeleted
 
     ~EnsureTopLevelsDeleted()
     {
-        deleteAll(DockRegistry::self()->floatingWindows(/*includeBeingDeleted=*/true));
-        deleteAll(DockRegistry::self()->dockwidgets());
+        qDeleteAll(DockRegistry::self()->floatingWindows(/*includeBeingDeleted=*/true));
+        qDeleteAll(DockRegistry::self()->dockwidgets());
 
         if (!DockRegistry::self()->isEmpty()) {
             auto dr = DockRegistry::self();
@@ -105,6 +116,7 @@ struct EnsureTopLevelsDeleted
         // Other cleanup, since we use this class everywhere
         Config::self().setDockWidgetFactoryFunc(nullptr);
         Config::self().setMainWindowFactoryFunc(nullptr);
+        Config::self().setDockWidgetTabIndexOverrideFunc(nullptr);
         Config::self().setInternalFlags(m_originalInternalFlags);
         Config::self().setFlags(m_originalFlags);
         Config::self().setMDIFlags(m_originalMDIFlags);
@@ -123,7 +135,7 @@ bool shouldBlacklistWarning(const QString &msg, const QString &category = {});
 
 std::unique_ptr<Core::MainWindow>
 createMainWindow(Size sz = { 1000, 1000 },
-                 KDDockWidgets::MainWindowOptions options = MainWindowOption_HasCentralFrame,
+                 KDDockWidgets::MainWindowOptions options = MainWindowOption_HasCentralGroup,
                  const QString &name = {}, bool show = true);
 
 
@@ -144,9 +156,9 @@ void nestDockWidget(Core::DockWidget *dock, Core::DropArea *dropArea,
 void doubleClickOn(Point globalPos, std::shared_ptr<Core::Window> receiver);
 void pressOn(Point globalPos, Core::View *receiver);
 void pressOn(Point globalPos, std::shared_ptr<Core::Window> receiver);
-KDDW_QCORO_TASK releaseOn(Point globalPos, Core::View *receiver);
+bool releaseOn(Point globalPos, Core::View *receiver);
 void clickOn(Point globalPos, Core::View *receiver);
-KDDW_QCORO_TASK moveMouseTo(Point globalDest, Core::View *receiver);
+bool moveMouseTo(Point globalDest, Core::View *receiver);
 
 inline Core::FloatingWindow *createFloatingWindow()
 {
@@ -182,13 +194,13 @@ inline Core::View *draggableFor(Core::View *view)
     return draggable;
 }
 
-inline KDDW_QCORO_TASK drag(Core::View *sourceWidget, Point pressGlobalPos, Point globalDest,
-                            ButtonActions buttonActions = ButtonActions(ButtonAction_Press)
-                                | ButtonAction_Release)
+inline bool drag(Core::View *sourceWidget, Point pressGlobalPos, Point globalDest,
+                 ButtonActions buttonActions = ButtonActions(ButtonAction_Press)
+                     | ButtonAction_Release)
 {
     if (buttonActions & ButtonAction_Press) {
         if (s_pauseBeforePress)
-            KDDW_CO_AWAIT Core::Platform::instance()->tests_wait(DEBUGGING_PAUSE_DURATION);
+            QTest::qWait(DEBUGGING_PAUSE_DURATION);
 
         pressOn(pressGlobalPos, sourceWidget);
     }
@@ -196,19 +208,19 @@ inline KDDW_QCORO_TASK drag(Core::View *sourceWidget, Point pressGlobalPos, Poin
     sourceWidget->activateWindow();
 
     if (s_pauseBeforeMove)
-        KDDW_CO_AWAIT Core::Platform::instance()->tests_wait(DEBUGGING_PAUSE_DURATION);
+        QTest::qWait(DEBUGGING_PAUSE_DURATION);
 
-    KDDW_CO_AWAIT moveMouseTo(globalDest, sourceWidget);
+    moveMouseTo(globalDest, sourceWidget);
     pressGlobalPos = sourceWidget->mapToGlobal(Point(10, 10));
     if (buttonActions & ButtonAction_Release)
-        KDDW_CO_AWAIT releaseOn(globalDest, sourceWidget);
+        releaseOn(globalDest, sourceWidget);
 
-    KDDW_CO_RETURN true;
+    return true;
 }
 
-inline KDDW_QCORO_TASK drag(Core::View *sourceView, Point globalDest,
-                            ButtonActions buttonActions = ButtonActions(ButtonAction_Press)
-                                | ButtonAction_Release)
+inline bool drag(Core::View *sourceView, Point globalDest,
+                 ButtonActions buttonActions = ButtonActions(ButtonAction_Press)
+                     | ButtonAction_Release)
 {
     assert(sourceView && sourceView->controller()->isVisible());
 
@@ -217,40 +229,40 @@ inline KDDW_QCORO_TASK drag(Core::View *sourceView, Point globalDest,
     assert(draggable && draggable->controller()->isVisible());
     const Point pressGlobalPos = draggable->mapToGlobal(Point(15, 15));
 
-    auto result = KDDW_CO_AWAIT drag(draggable, pressGlobalPos, globalDest, buttonActions);
-    KDDW_CO_RETURN result;
+    auto result = drag(draggable, pressGlobalPos, globalDest, buttonActions);
+    return result;
 }
 
-inline KDDW_QCORO_TASK dragFloatingWindowTo(Core::FloatingWindow *fw, Point globalDest,
-                                            ButtonActions buttonActions = ButtonActions(ButtonAction_Press)
-                                                | ButtonAction_Release)
+inline bool dragFloatingWindowTo(Core::FloatingWindow *fw, Point globalDest,
+                                 ButtonActions buttonActions = ButtonActions(ButtonAction_Press)
+                                     | ButtonAction_Release)
 {
     Core::View *draggable = draggableFor(fw->view());
     assert(draggable);
     assert(draggable->controller()->isVisible());
-    auto result = KDDW_CO_AWAIT drag(draggable, draggable->mapToGlobal(Point(10, 10)), globalDest, buttonActions);
-    KDDW_CO_RETURN result;
+    auto result = drag(draggable, draggable->mapToGlobal(Point(10, 10)), globalDest, buttonActions);
+    return result;
 }
 
-inline KDDW_QCORO_TASK dragFloatingWindowTo(Core::FloatingWindow *fw, Core::DropArea *target,
-                                            DropLocation dropLocation)
+inline bool dragFloatingWindowTo(Core::FloatingWindow *fw, Core::DropArea *target,
+                                 DropLocation dropLocation)
 {
     // run one event loop, needed by flutter
-    KDDW_CO_AWAIT Core::Platform::instance()->tests_wait(100);
+    QTest::qWait(100);
 
     auto draggable = draggableFor(fw->view());
     assert(draggable);
 
     // First we drag over it, so the drop indicators appear:
-    KDDW_CO_AWAIT drag(draggable, draggable->mapToGlobal(Point(10, 10)),
-                       target->window()->mapToGlobal(target->window()->rect().center()), ButtonAction_Press);
+    drag(draggable, draggable->mapToGlobal(Point(10, 10)),
+         target->window()->mapToGlobal(target->window()->rect().center()), ButtonAction_Press);
 
     // Now we drag over the drop indicator and only then release mouse:
     Core::DropIndicatorOverlay *dropIndicatorOverlay = target->dropIndicatorOverlay();
     const Point dropPoint = dropIndicatorOverlay->posForIndicator(dropLocation);
 
-    auto result = KDDW_CO_AWAIT drag(draggable, Point(), dropPoint, ButtonAction_Release);
-    KDDW_CO_RETURN result;
+    auto result = drag(draggable, Point(), dropPoint, ButtonAction_Release);
+    return result;
 }
 
 inline int osWindowMinWidth()

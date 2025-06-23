@@ -19,6 +19,7 @@
 #include "qtquick/views/TitleBar.h"
 #include "qtquick/views/DockWidget.h"
 #include "qtquick/views/MainWindow.h"
+#include "qtquick/views/FloatingWindow.h"
 #include "core/MDILayout.h"
 #include "core/views/MainWindowViewInterface.h"
 #include "core/MainWindow.h"
@@ -66,6 +67,8 @@ private Q_SLOTS:
     void tst_affinities();
 
     void tst_deleteDockWidget();
+    void tst_setViewFactory();
+    void tst_quickWindowCreationCallback();
 };
 
 
@@ -209,7 +212,7 @@ void TestQtQuick::tst_isFloatingIsEmitted()
     }
 
     // 1 event loop for DelayedDelete. Avoids LSAN warnings.
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(1);
+    QTest::qWait(1);
 }
 
 void TestQtQuick::tst_shutdownCrash()
@@ -230,7 +233,7 @@ void TestQtQuick::tst_shutdownCrash()
     // delete group;
 
     // // 1 event loop for DelayedDelete. Avoids LSAN warnings.
-    // KDDW_CO_AWAIT Platform::instance()->tests_wait(1);
+    // Platform::instance()->tests_wait(1);
 }
 
 void TestQtQuick::tst_childQmlContext()
@@ -304,7 +307,7 @@ void TestQtQuick::tst_childQmlContext()
     }
 
     // 1 event loop for DelayedDelete. Avoids LSAN warnings.
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(1);
+    QTest::qWait(1);
 }
 
 void TestQtQuick::tst_focusBetweenTabs()
@@ -321,7 +324,7 @@ void TestQtQuick::tst_focusBetweenTabs()
     auto floatingDock = DockRegistry::self()->dockByName("floatingDock");
 
     dock1->view()->rootView()->activateWindow();
-    KDDW_CO_AWAIT Platform::instance()->tests_wait(2000);
+    QTest::qWait(2000);
     dock1->dptr()->group()->focus();
 
     QVERIFY(dock1->isFocused());
@@ -404,7 +407,6 @@ void TestQtQuick::tst_focusBetweenTabs()
     QVERIFY(floatingDockField->hasActiveFocus());
 
     // 1 event loop for DelayedDelete. Avoids LSAN warnings.
-    KDDW_CO_AWAIT
     Platform::instance()
         ->tests_wait(1);
 }
@@ -517,6 +519,42 @@ void TestQtQuick::tst_effectiveVisibilityBug()
     const auto mainWindows = DockRegistry::self()->mainwindows();
     QCOMPARE(mainWindows.size(), 1);
     QVERIFY(mainWindows.first()->isVisible());
+}
+
+void TestQtQuick::tst_setViewFactory()
+{
+    // Tests that setting a view factory will refresh the context property
+    EnsureTopLevelsDeleted e;
+    QQmlApplicationEngine engine(":/main2.qml");
+    QQmlContext *rootContext = plat()->qmlEngine()->rootContext();
+
+    QCOMPARE(rootContext->contextProperty("_kddw_widgetFactory").value<QObject *>(), Config::self().viewFactory());
+
+    // now change view factory:
+    auto newFactory = Platform::instance()->createDefaultViewFactory();
+    Config::self().setViewFactory(newFactory);
+    QCOMPARE(rootContext->contextProperty("_kddw_widgetFactory").value<QObject *>(), newFactory);
+}
+
+void TestQtQuick::tst_quickWindowCreationCallback()
+{
+    EnsureTopLevelsDeleted e;
+    QQmlApplicationEngine engine(":/main2.qml");
+
+    int callCount = 0;
+    auto onWindowCreated = [&](QQuickView *window, QtQuick::MainWindow *parent) -> void {
+        Q_UNUSED(window);
+        Q_UNUSED(parent);
+        callCount++;
+    };
+    QtQuick::FloatingWindow::setQuickWindowCreationCallback(onWindowCreated);
+
+    auto dock0 = createDockWidget(
+        "dock0", Platform::instance()->tests_createView({ true, {}, QSize(400, 400) }));
+    dock0->setFloating(true);
+
+    QCOMPARE(callCount, 1);
+    QtQuick::FloatingWindow::setQuickWindowCreationCallback(nullptr);
 }
 
 int main(int argc, char *argv[])

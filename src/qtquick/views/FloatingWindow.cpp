@@ -15,7 +15,6 @@
 
 #include "TitleBar.h"
 
-#include "core/Logging_p.h"
 #include "core/Utils_p.h"
 #include "core/View_p.h"
 #include "core/FloatingWindow_p.h"
@@ -38,6 +37,8 @@
 
 using namespace KDDockWidgets;
 using namespace KDDockWidgets::QtQuick;
+
+QuickWindowCreationCallback KDDockWidgets::QtQuick::FloatingWindow::s_quickWindowCreationCallback = {};
 
 namespace KDDockWidgets {
 
@@ -88,12 +89,12 @@ public:
 
     void onRootItemWidthChanged()
     {
-        setWidth(int(m_view->width()));
+        setWidth(m_view->width());
     }
 
     void onRootItemHeightChanged()
     {
-        setHeight(int(m_view->height()));
+        setHeight(m_view->height());
     }
 
     void updateSize()
@@ -140,6 +141,9 @@ FloatingWindow::FloatingWindow(Core::FloatingWindow *controller,
     , m_controller(controller)
 {
     connect(m_quickWindow, &QWindow::windowStateChanged, this, &FloatingWindow::onWindowStateChanged);
+
+    if (s_quickWindowCreationCallback)
+        s_quickWindowCreationCallback(m_quickWindow, parent);
 }
 
 FloatingWindow::~FloatingWindow()
@@ -244,7 +248,7 @@ void FloatingWindow::init()
     });
 }
 
-QObject *FloatingWindow::titleBar() const
+KDDockWidgets::QtQuick::TitleBar *FloatingWindow::titleBar() const
 {
     if (auto tb = m_controller->titleBar())
         return qobject_cast<TitleBar *>(asQQuickItem(tb->view()));
@@ -252,7 +256,7 @@ QObject *FloatingWindow::titleBar() const
     return nullptr;
 }
 
-QObject *FloatingWindow::dropArea() const
+KDDockWidgets::QtQuick::DropArea *FloatingWindow::dropArea() const
 {
     if (auto da = m_controller->dropArea())
         return qobject_cast<DropArea *>(asQQuickItem(da->view()));
@@ -279,6 +283,12 @@ void FloatingWindow::onWindowStateChanged(Qt::WindowState state)
         WidgetResizeHandler::requestNCCALCSIZE(HWND(window()->handle()));
     }
 #endif
+}
+
+/** static */
+void FloatingWindow::setQuickWindowCreationCallback(const QuickWindowCreationCallback &callback)
+{
+    s_quickWindowCreationCallback = callback;
 }
 
 #include "FloatingWindow.moc"

@@ -37,8 +37,8 @@ int main(int argc, char **argv)
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
     QApplication app(argc, argv);
-    app.setOrganizationName(QStringLiteral("KDAB"));
-    app.setApplicationName(QStringLiteral("Test app"));
+    QCoreApplication::setOrganizationName(QStringLiteral("KDAB"));
+    QCoreApplication::setApplicationName(QStringLiteral("Test app"));
 
     KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtWidgets);
 
@@ -205,6 +205,16 @@ int main(int argc, char **argv)
                                     "The main window will have a non-detachable central widget"));
     parser.addOption(centralWidget);
 
+    QCommandLineOption centralWidgetAllExtraSize(
+        "central-widget-all-extra-size",
+        QCoreApplication::translate("main",
+                                    "The main window will have a non-detachable central widget which "
+                                    "gets all the extra space when the window is enlarged (imples --central-widget"));
+    parser.addOption(centralWidgetAllExtraSize);
+
+    QCommandLineOption tabsAtBottom("tabs-at-bottom", QCoreApplication::translate("main", "Shows tabs at bottom"));
+    parser.addOption(tabsAtBottom);
+
     QCommandLineOption ctxtMenuOnTabs(
         "allow-switch-tabs-via-menu",
         QCoreApplication::translate("main", "Allow switching tabs via context menu in tabs area"));
@@ -268,10 +278,15 @@ int main(int argc, char **argv)
 #if defined(DOCKS_DEVELOPER_MODE)
     auto internalFlags = KDDockWidgets::Config::self().internalFlags();
 
-    options = parser.isSet(centralFrame) ? MainWindowOption_HasCentralFrame : MainWindowOption_None;
+    options = parser.isSet(centralFrame) ? MainWindowOption_HasCentralGroup : MainWindowOption_None;
 
     if (parser.isSet(centralWidget))
         options |= MainWindowOption_HasCentralWidget;
+
+    if (parser.isSet(centralWidgetAllExtraSize)) {
+        options |= MainWindowOption_HasCentralWidget;
+        options |= MainWindowOption_CentralWidgetGetsAllExtraSpace;
+    }
 
     if (parser.isSet(noQtTool))
         internalFlags |= KDDockWidgets::Config::InternalFlag_DontUseQtToolWindowsForFloatingWindows;
@@ -383,8 +398,8 @@ int main(int argc, char **argv)
         KDDockWidgets::Config::self().setDropIndicatorAllowedFunc(func);
     }
 
+    KDDockWidgets::Config::self().setTabsAtBottom(parser.isSet(tabsAtBottom));
     KDDockWidgets::Config::self().setFlags(flags);
-
 
 
     MyMainWindow::ExampleOptions exampleOptions = {};
@@ -416,7 +431,7 @@ int main(int argc, char **argv)
         ///   3.1. We also install an event filter to show the drop indicators when ctrl is pressed
 
         KDDockWidgets::Config::self().setDragAboutToStartFunc([](Core::Draggable *draggable) -> bool {
-            const bool ctrlIsPressed = qApp->keyboardModifiers() & Qt::ControlModifier;
+            const bool ctrlIsPressed = qGuiApp->keyboardModifiers() & Qt::ControlModifier;
 
             if (ctrlIsPressed || draggable->isInProgrammaticDrag()) {
                 KDDockWidgets::Config::self().setDropIndicatorsInhibited(false);
@@ -424,7 +439,7 @@ int main(int argc, char **argv)
             }
 
             if (draggable->isWindow()) {
-                qApp->installEventFilter(s_ctrlKeyEventFilter);
+                qGuiApp->installEventFilter(s_ctrlKeyEventFilter);
 
                 // Ctrl might already be pressed before the DnD even starts, so honour that as well
                 KDDockWidgets::Config::self().setDropIndicatorsInhibited(!ctrlIsPressed);
@@ -437,7 +452,7 @@ int main(int argc, char **argv)
 
         KDDockWidgets::Config::self().setDragEndedFunc([]() {
             // cleanup
-            qApp->removeEventFilter(s_ctrlKeyEventFilter);
+            qGuiApp->removeEventFilter(s_ctrlKeyEventFilter);
         });
     }
 
