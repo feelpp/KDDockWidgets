@@ -30,8 +30,13 @@ public:
     QString m_uniqueName;
     QString m_sourceFilename;
     QString m_title;
-    Core::DockWidget *m_dockWidget = nullptr;
+    QPointer<Core::DockWidget> m_dockWidget;
     QVector<QString> m_affinities;
+    KDDockWidgets::DockWidgetOptions m_options = KDDockWidgets::DockWidgetOption_None;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QVariantMap m_userData;
+    KDBindings::ScopedConnection userDataConnection;
+#endif
 
     KDBindings::ScopedConnection titleConnection;
     KDBindings::ScopedConnection closedConnection;
@@ -210,6 +215,14 @@ void DockWidgetInstantiator::deleteDockWidget()
     delete this;
 }
 
+void DockWidgetInstantiator::deleteDockWidgetLater()
+{
+    if (d->m_dockWidget)
+        d->m_dockWidget->deleteLater();
+
+    deleteLater();
+}
+
 void DockWidgetInstantiator::classBegin()
 {
     // Nothing interesting to do here.
@@ -228,8 +241,51 @@ void DockWidgetInstantiator::setAffinities(const QVector<QString> &affinities)
     }
 }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+QVariantMap DockWidgetInstantiator::userData() const
+{
+    return d->m_dockWidget ? d->m_dockWidget->userData() : d->m_userData;
+}
+
+void DockWidgetInstantiator::setUserData(const QVariantMap &userData)
+{
+    if (userData != this->userData()) {
+        d->m_userData = userData;
+        if (d->m_dockWidget) {
+            d->m_dockWidget->setUserData(userData);
+            // already emits signal
+        } else {
+            Q_EMIT userDataChanged();
+        }
+    }
+}
+#endif
+
+KDDockWidgets::DockWidgetOptions DockWidgetInstantiator::options() const
+{
+    return d->m_dockWidget ? d->m_dockWidget->options() : d->m_options;
+}
+
+void DockWidgetInstantiator::setOptions(KDDockWidgets::DockWidgetOptions options)
+{
+    if (d->m_options != options) {
+        d->m_options = options;
+        if (d->m_dockWidget) {
+            d->m_dockWidget->setOptions(options);
+        }
+        Q_EMIT optionsChanged(options);
+    }
+}
+
+KDDockWidgets::CloseReason DockWidgetInstantiator::lastCloseReason() const
+{
+    return d->m_dockWidget ? d->m_dockWidget->lastCloseReason() : KDDockWidgets::CloseReason::Unspecified;
+}
+
 void DockWidgetInstantiator::componentComplete()
 {
+    plat()->ensureQmlEngine(this);
+
     if (d->m_uniqueName.isEmpty()) {
         qWarning() << Q_FUNC_INFO
                    << "Each DockWidget need an unique name. Set the uniqueName property.";
@@ -253,7 +309,7 @@ void DockWidgetInstantiator::componentComplete()
     }
 
     d->m_dockWidget = ViewFactory::self()
-                          ->createDockWidget(d->m_uniqueName, qmlEngine(this))
+                          ->createDockWidget(d->m_uniqueName, qmlEngine(this), d->m_options)
                           ->asDockWidgetController();
 
     d->titleConnection = d->m_dockWidget->d->titleChanged.connect([this](const QString &title) { Q_EMIT titleChanged(title); });
@@ -286,6 +342,11 @@ void DockWidgetInstantiator::componentComplete()
         d->m_dockWidget->setFloating(d->m_isFloating.value());
 
     d->m_dockWidget->setAffinities(d->m_affinities);
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    d->m_dockWidget->setUserData(d->m_userData);
+    d->userDataConnection = d->m_dockWidget->d->userDataChanged.connect([this] { Q_EMIT userDataChanged(); });
+#endif
 
     Q_EMIT dockWidgetChanged();
 }

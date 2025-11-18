@@ -1,3 +1,10 @@
+* v2.4.0
+  - qtquick: Expose DockWidgetOptions to QML
+  - qtquick: Expose 'DockWidget::lastCloseReason' to QML
+  - qtquick: Add DockWidgetInstantiator::deleteDockWidgetLater
+  - qtwidgets: Support tabs in south location
+  - cmake: Add -DKDDockWidgets_ENABLE_HARDENED (default OFF). Follows Qt and adds -fhardened on supported compilers.
+
 * v2.3.0
   - For packagers:
     - KDDockWidgets now looks for Qt6 by default, rather than Qt5. If your Qt5
@@ -6,13 +13,19 @@
     - New dependency on QtGuiPrivate (for qtx11extras_p.h header), on Linux
   - qtquick: Add QtQuick::IndicatorWindow::setQuickWindowCreationCallback
   - qtquick: Add support for building as a QML module and fixed all qmllint warnings
+  - qtquick: Add support to use as QML plugin without requiring C++ or explicit linking
+  - qtquick: User no longer needs to call KDDockWidgets::initFrontend() if you're using QGuiApplication instead of QApplication
+  - qtquick: Implement QML api for Config::setDockWidgetFactoryFunc
   - Add MainWindowOption_CentralWidgetGetsAllExtraSpace
   - Internal nlohmann bumped to v3.12
   - QtWidgets::ViewFactory::createTitleBarButton() is now virtual
+  - qtwidgets: Fix crash when undocking (#661)
   - Support window managers without translucency in Qt 6 (#629)
   - Add Config::Flag_DisableDoubleClick
   - Don't steal QStyle ownership from QApplication
   - Added Core::DockWidget::setUserData(QVariantMap)
+  - Fixed static build when using QML module
+  - Wayland: Fix dropping over dock widgets that also accept drops, like nested QQuickWidget (#658)
 
 * v2.2.5
   - Fix version being reported as 2.2.3

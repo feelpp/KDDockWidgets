@@ -126,6 +126,7 @@ option(KDDockWidgets_NO_SPDLOG "Don't use spdlog, even if it is found." OFF)
 option(KDDockWidgets_USE_LLD "Use lld for linking" OFF)
 option(KDDockWidgets_USE_VALGRIND "Runs the tests under valgrind" OFF)
 option(KDDockWidgets_QML_MODULE "The QtQuick support will be built as a QML module" OFF)
+option(KDDockWidgets_ENABLE_HARDENED "Enable -fhardened equivalent for GCC" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/ECM/modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/KDAB/modules")
@@ -163,11 +164,24 @@ else()
     set(QT_MIN_VERSION "5.15")
 endif()
 
-if(KDDockWidgets_DEVELOPER_MODE
-   AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
-   AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "14.1"
-)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fhardened -O1")
+if(KDDockWidgets_ENABLE_HARDENED)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        set(CMAKE_CXX_FLAGS
+            "${CMAKE_CXX_FLAGS} -O2 -D_FORTIFY_SOURCE=3 -D_GLIBCXX_ASSERTIONS -fPIE  -pie -Wl,-z,now -Wl,-z,relro -fstack-protector-strong -fstack-clash-protection -fcf-protection=full"
+        )
+        if(KDDockWidgets_DEVELOPER_MODE)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftrivial-auto-var-init=pattern")
+        else()
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftrivial-auto-var-init=zero")
+        endif()
+    elseif(APPLE)
+        if(KDDockWidgets_DEVELOPER_MODE)
+            set(HARDENING_MODE "_LIBCPP_HARDENING_MODE_DEBUG")
+        else()
+            set(HARDENING_MODE "_LIBCPP_HARDENING_MODE_FAST")
+        endif()
+        add_definitions("-D_LIBCPP_HARDENING_MODE=${HARDENING_MODE}")
+    endif()
 endif()
 
 # BEGIN frontend enabling
@@ -412,7 +426,7 @@ macro(set_compiler_flags targetName)
             PRIVATE QT_FORCE_ASSERTS
         )
 
-        if(NOT MSVC AND NOT APPLE)
+        if(NOT WIN32 AND NOT APPLE)
             target_compile_options(${targetName} PRIVATE -Wall -Wextra -Woverloaded-virtual)
             if(KDDockWidgets_USE_LLD)
                 target_link_options(${targetName} PRIVATE -fuse-ld=lld)

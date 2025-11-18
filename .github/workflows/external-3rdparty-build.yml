@@ -8,11 +8,11 @@ on:
   push:
     branches:
       - main
-      - 2.2
+      - 2.4
   pull_request:
     branches:
       - main
-      - 2.2
+      - 2.4
 
 jobs:
   build:
@@ -23,6 +23,9 @@ jobs:
         with:
           version: 6.7.2
           cache: true
+
+      - name: Fix CMake # otherwise: Error: cmake is already installed from local/pinned!
+        run: brew uninstall cmake || true
 
       - name: Install Dependencies
         run: |

@@ -44,6 +44,11 @@ class DockWidgetInstantiator : public QQuickItem
     Q_PROPERTY(bool isFloating READ isFloating WRITE setFloating NOTIFY isFloatingChanged)
     Q_PROPERTY(bool isOpen READ isOpen NOTIFY isOpenChanged)
     Q_PROPERTY(QVector<QString> affinities READ affinities WRITE setAffinities NOTIFY affinitiesChanged)
+    Q_PROPERTY(KDDockWidgets::DockWidgetOptions options READ options WRITE setOptions NOTIFY optionsChanged)
+    Q_PROPERTY(KDDockWidgets::CloseReason lastCloseReason READ lastCloseReason NOTIFY lastCloseReasonChanged)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    Q_PROPERTY(QVariantMap userData READ userData WRITE setUserData NOTIFY userDataChanged)
+#endif
 public:
     DockWidgetInstantiator();
     ~DockWidgetInstantiator() override;
@@ -54,8 +59,8 @@ public:
     QString source() const;
     void setSource(const QString &);
 
-    KDDockWidgets::QtQuick::DockWidget *dockWidget() const;
-    KDDockWidgets::Core::DockWidget *controller() const;
+    Q_INVOKABLE KDDockWidgets::QtQuick::DockWidget *dockWidget() const;
+    Q_INVOKABLE KDDockWidgets::Core::DockWidget *controller() const;
     QObject *actualTitleBar() const;
 
     QString title() const;
@@ -67,6 +72,16 @@ public:
     void setFloating(bool);
     QVector<QString> affinities() const;
     void setAffinities(const QVector<QString> &);
+
+    KDDockWidgets::DockWidgetOptions options() const;
+    void setOptions(KDDockWidgets::DockWidgetOptions);
+
+    KDDockWidgets::CloseReason lastCloseReason() const;
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QVariantMap userData() const;
+    void setUserData(const QVariantMap &userData);
+#endif
 
     Q_INVOKABLE void addDockWidgetAsTab(QQuickItem *other,
                                         KDDockWidgets::InitialVisibilityOption = {});
@@ -93,6 +108,9 @@ public:
     /// It's more usual to just hide dock widgets though.
     Q_INVOKABLE void deleteDockWidget();
 
+    /// Deletes the dock widget via deleteLater()
+    Q_INVOKABLE void deleteDockWidgetLater();
+
 protected:
     void classBegin() override;
     void componentComplete() override;
@@ -114,6 +132,10 @@ Q_SIGNALS:
     void removedFromSideBar();
     void windowActiveAboutToChange(bool activated);
     void affinitiesChanged();
+    void lastCloseReasonChanged();
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    void userDataChanged();
+#endif
 
 private:
     class Private;
