@@ -21,7 +21,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 include_directories(..)
 include_directories(../src)
-include_directories(../src/private)
 add_definitions(-DQT_NO_KEYWORDS)
 
 set(TESTING_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test_resources.qrc)
@@ -140,29 +139,6 @@ if(KDDW_FRONTEND_QT)
         add_subdirectory(wayland)
     endif()
 
-endif()
-
-if(KDDW_FRONTEND_FLUTTER)
-    if(UNIX AND NOT APPLE)
-        set(FLUTTER_DEVICE linux)
-        set(TEST_RUNNER "xvfb-run")
-    elseif(WIN32)
-        set(FLUTTER_DEVICE windows)
-    elseif(APPLE)
-        set(FLUTTER_DEVICE macos)
-    endif()
-
-    add_test(
-        NAME tst_flutter_unittests
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/flutter/dart/
-        COMMAND flutter test
-    )
-
-    add_test(
-        NAME tst_flutter_integrationtests
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/flutter/
-        COMMAND ${TEST_RUNNER} flutter test integration_test -d ${FLUTTER_DEVICE}
-    )
 endif()
 
 # qml.exe standalone test

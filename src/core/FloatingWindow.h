@@ -44,7 +44,7 @@ public:
     virtual ~FloatingWindow() override;
 
     bool deserialize(const LayoutSaver::FloatingWindow &);
-    LayoutSaver::FloatingWindow serialize() const;
+    LayoutSaver::FloatingWindow serialize(const Vector<QString> &affinityNames) const;
 
     // Draggable:
     std::unique_ptr<WindowBeingDragged> makeWindow() override;
@@ -92,6 +92,7 @@ public:
 
     bool anyNonClosable() const;
     bool anyNonDockable() const;
+    bool anyNoDrops() const;
 
     /**
      * @brief checks if this FloatingWindow only has one group.
@@ -230,5 +231,8 @@ private:
     int m_lastHitTest = 0;
 #endif
 };
+
+DOCKS_EXPORT Vector<FloatingWindow *>
+floatingWindowsForAffinity(const Vector<QString> &affinityNames);
 
 }

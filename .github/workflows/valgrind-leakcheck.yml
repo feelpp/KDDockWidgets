@@ -33,10 +33,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update -qq
-          sudo apt install lld ninja-build libspdlog-dev valgrind -y
+          sudo apt install mold ninja-build libspdlog-dev valgrind -y
 
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configure
         run: cmake --preset=dev6 -DKDDockWidgets_EXAMPLES=OFF

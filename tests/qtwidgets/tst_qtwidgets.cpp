@@ -244,6 +244,8 @@ private Q_SLOTS:
     void tst_complex();
     void tst_restoreFloatingMaximizedState();
     void tst_findAncestor();
+    void tst_affinityWithPersistentCentralGroup();
+    void tst_affinityFloatingWindowIndexMismatch();
 #if defined(KDDW_FRONTEND_QT) && QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     void tst_userData();
 #endif
@@ -3134,6 +3136,106 @@ void TestQtWidgets::tst_controllerToView()
 
     QCOMPARE(dw->view(), dwView);
     QCOMPARE(dws[0]->view(), dwView);
+}
+
+void TestQtWidgets::tst_affinityWithPersistentCentralGroup()
+{
+    EnsureTopLevelsDeleted e;
+
+    auto m = createMainWindow(QSize(1000, 800), MainWindowOption_HasCentralGroup, "mw1");
+    m->setAffinities({ "global", "projects" });
+    m->setDocumentAffinity("projects");
+
+    auto projectDock1 = new QtWidgets::DockWidget("project1");
+    projectDock1->asDockWidgetController()->setAffinities({ "projects" });
+    m->addDockWidgetAsTab(projectDock1->asDockWidgetController());
+
+    auto projectDock2 = new QtWidgets::DockWidget("project2");
+    projectDock2->asDockWidgetController()->setAffinities({ "projects" });
+    m->addDockWidgetAsTab(projectDock2->asDockWidgetController());
+
+    auto dockedGlobal = new QtWidgets::DockWidget("dockedGlobal");
+    dockedGlobal->asDockWidgetController()->setAffinities({ "global" });
+    m->addDockWidgetToSide(dockedGlobal->asDockWidgetController(), KDDockWidgets::Location_OnLeft);
+
+    auto dockedGlobal2 = new QtWidgets::DockWidget("dockedGlobal2");
+    dockedGlobal2->asDockWidgetController()->setAffinities({ "global" });
+    m->addDockWidgetToSide(dockedGlobal2->asDockWidgetController(), KDDockWidgets::Location_OnRight);
+
+    auto floatingGlobal = new QtWidgets::DockWidget("floatingGlobal");
+    floatingGlobal->asDockWidgetController()->setAffinities({ "global" });
+    floatingGlobal->asDockWidgetController()->open();
+
+    auto floatingProjects = new QtWidgets::DockWidget("floatingProjects");
+    floatingProjects->asDockWidgetController()->setAffinities({ "projects" });
+    floatingProjects->asDockWidgetController()->open();
+
+    LayoutSaver projectSaver;
+    projectSaver.setAffinityNames({ "projects" });
+
+    LayoutSaver globalSaver;
+    globalSaver.setAffinityNames({ "global" });
+
+    const auto &projectLayout = projectSaver.serializeLayout();
+    const auto &globalLayout = globalSaver.serializeLayout();
+
+    // Make changes to the global state and to the project state
+    projectDock2->close();
+    dockedGlobal2->close();
+    floatingGlobal->close();
+    floatingProjects->close();
+
+    QVERIFY(dockedGlobal->isOpen());
+    QVERIFY(!dockedGlobal->isFloating());
+
+    QVERIFY(projectSaver.restoreLayout(projectLayout));
+
+    // Verify that only the project layout was restored, and the global layout is unaffected
+    QVERIFY(projectDock2->isOpen());
+    QVERIFY(!dockedGlobal2->isOpen());
+    QVERIFY(dockedGlobal->isOpen());
+    QVERIFY(!dockedGlobal->isFloating());
+    QVERIFY(!floatingGlobal->isOpen());
+
+    projectDock2->close(); // close it again
+
+    QVERIFY(globalSaver.restoreLayout(globalLayout));
+
+    // verify that the global layout was restored, and the project layout is unaffected
+    QVERIFY(dockedGlobal->isOpen());
+    QVERIFY(dockedGlobal2->isOpen());
+    QVERIFY(floatingGlobal->isOpen());
+    QVERIFY(projectDock1->isOpen());
+    QVERIFY(!projectDock1->isFloating());
+    QVERIFY(!projectDock2->isOpen());
+}
+
+void TestQtWidgets::tst_affinityFloatingWindowIndexMismatch()
+{
+    EnsureTopLevelsDeleted e;
+
+    auto m = createMainWindow(QSize(1000, 800), {}, "mw1");
+
+    auto floatA = new QtWidgets::DockWidget("floatA");
+    floatA->asDockWidgetController()->setAffinities({ "a1" });
+    floatA->asDockWidgetController()->open();
+
+    auto floatB = new QtWidgets::DockWidget("floatB");
+    floatB->asDockWidgetController()->setAffinities({ "a2" });
+    floatB->asDockWidgetController()->open();
+
+    auto floatC = new QtWidgets::DockWidget("floatC");
+    floatC->asDockWidgetController()->setAffinities({ "a1" });
+    floatC->asDockWidgetController()->open();
+
+    QCOMPARE(DockRegistry::self()->floatingWindows().size(), 3);
+
+    LayoutSaver saver;
+    saver.setAffinityNames({ "a2" });
+    const QByteArray saved = saver.serializeLayout();
+    QVERIFY(!saved.isEmpty());
+
+    QVERIFY(saver.restoreLayout(saved));
 }
 
 int main(int argc, char *argv[])

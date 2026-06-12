@@ -24,7 +24,7 @@ jobs:
         os:
           - ubuntu-24.04
           - windows-latest
-          - macos-13
+          - macos-15-intel
 
         preset:
           - name: ci-dev-qt5
@@ -45,16 +45,16 @@ jobs:
           version: ${{ matrix.preset.qt_version }}
           cache: true
 
-      - name: Install spdlog on Ubuntu
+      - name: Install dependencies on Ubuntu
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt install libspdlog-dev -y
+          sudo apt install libspdlog-dev mold -y
 
       - name: Install ninja-build tool (must be after Qt due PATH changes)
         uses: turtlesec-no/get-ninja@main
 
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Make sure MSVC is found when Ninja generator is in use
         if: ${{ runner.os == 'Windows' }}

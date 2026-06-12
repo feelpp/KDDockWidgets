@@ -437,6 +437,13 @@ bool FloatingWindow::anyNonDockable() const
     return false;
 }
 
+bool FloatingWindow::anyNoDrops() const
+{
+    if (!hasSingleGroup())
+        return false;
+    return singleFrame()->anyNoDrops();
+}
+
 bool FloatingWindow::hasSingleGroup() const
 {
     return d->m_dropArea->hasSingleGroup();
@@ -603,14 +610,14 @@ bool FloatingWindow::deserialize(const LayoutSaver::FloatingWindow &fw)
     return false;
 }
 
-LayoutSaver::FloatingWindow FloatingWindow::serialize() const
+LayoutSaver::FloatingWindow FloatingWindow::serialize(const Vector<QString> &affinityNames) const
 {
     LayoutSaver::FloatingWindow fw;
 
     fw.geometry = geometry();
     fw.normalGeometry = view()->normalGeometry();
     fw.isVisible = isVisible();
-    fw.multiSplitterLayout = dropArea()->serialize();
+    fw.multiSplitterLayout = dropArea()->serialize(affinityNames);
     fw.screenIndex = Platform::instance()->screenNumberForView(view());
     fw.screenSize = Platform::instance()->screenSizeFor(view());
     fw.affinities = affinities();
@@ -850,4 +857,23 @@ FloatingWindow::Private::Private(FloatingWindowFlags requestedFlags, FloatingWin
     : m_flags(flagsForFloatingWindow(requestedFlags))
     , m_dropArea(new DropArea(q->view(), MainWindowOption_None))
 {
+}
+
+Vector<FloatingWindow *>
+KDDockWidgets::Core::floatingWindowsForAffinity(const Vector<QString> &affinityNames)
+{
+    auto registry = DockRegistry::self();
+    auto allFw = registry->floatingWindows(/*includeBeingDeleted=*/false, /*honourSkipped=*/true);
+    if (affinityNames.isEmpty())
+        return allFw;
+
+    Vector<FloatingWindow *> result;
+    result.reserve(allFw.size());
+    for (auto fw : allFw) {
+        if (fw->affinities().isEmpty()
+            || registry->affinitiesMatch(affinityNames, fw->affinities())) {
+            result.push_back(fw);
+        }
+    }
+    return result;
 }

@@ -35,10 +35,10 @@ jobs:
       - name: Install dependencies on Ubuntu
         run: |
           sudo apt update -qq
-          sudo apt install lld libspdlog-dev ninja-build -y
+          sudo apt install lld libspdlog-dev ninja-build mold -y
 
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configure project
         run: cmake -S . -B ./build-${{ matrix.preset.name }} --preset ${{ matrix.preset.name }}

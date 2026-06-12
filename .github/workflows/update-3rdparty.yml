@@ -17,20 +17,20 @@ jobs:
       - name: Install dependencies on Ubuntu
         run: |
           sudo apt update -qq
-          sudo apt install rsync -y
+          sudo apt install rsync mold -y
 
       - name: Checkout KDDW
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout KDBindings
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: KDAB/KDBindings
           path: KDBindings
           ref: main
 
       - name: Checkout ci-release-tools
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: KDABLabs/ci-release-tools
           path: ci-release-tools

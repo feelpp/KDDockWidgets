@@ -231,6 +231,16 @@ void MainWindow::setAffinities(const Vector<QString> &affinityNames)
     d->affinities = affinities;
 }
 
+void MainWindow::setDocumentAffinity(const QString &affinity)
+{
+    d->m_documentAffinity = affinity;
+}
+
+QString MainWindow::documentAffinity() const
+{
+    return d->m_documentAffinity;
+}
+
 Vector<QString> MainWindow::affinities() const
 {
     return d->affinities;
@@ -776,7 +786,7 @@ bool MainWindow::deserialize(const LayoutSaver::MainWindow &mw)
     return success;
 }
 
-LayoutSaver::MainWindow MainWindow::serialize() const
+LayoutSaver::MainWindow MainWindow::serialize(const Vector<QString> &affinityNames) const
 {
     LayoutSaver::MainWindow m;
 
@@ -789,7 +799,7 @@ LayoutSaver::MainWindow MainWindow::serialize() const
     m.uniqueName = uniqueName();
     m.screenIndex = Platform::instance()->screenNumberForView(view());
     m.screenSize = Platform::instance()->screenSizeFor(view());
-    m.multiSplitterLayout = layout()->serialize();
+    m.multiSplitterLayout = layout()->serialize(affinityNames);
     m.affinities = d->affinities;
     m.windowState = window ? window->windowState() : WindowState::None;
 
@@ -873,7 +883,7 @@ bool MainWindow::isInDockWidget() const
         return false;
 
     if (auto p = v->parentView())
-        return p->firstParentOfType(p.get(), ViewType::DockWidget) != nullptr;
+        return View::firstParentOfType(p.get(), ViewType::DockWidget) != nullptr;
 
     return false;
 }
